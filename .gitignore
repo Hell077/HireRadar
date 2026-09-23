@@ -1,273 +1,38 @@
-# .gitignore file created for free with Tower (https://www.git-tower.com/)
-# For suggestions or improvements please contact us using support@git-tower.com
-# Generated on 2026-09-23
-# Includes: python, react, next_js, git, javascript, pycharm
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-### Universal ###
-# Common files that should be ignored in all projects
+# Dependencies
+node_modules
+.pnp
+.pnp.js
 
-# Logs
-*.log
-# Temporary files
-*.tmp
-*~
-
-*.bak
-# Environment files (containing secrets, API keys, credentials)
+# Local env files
 .env
-*.env
-.env.*
-
-# Local configuration that shouldn't be shared
-*.local
-
-### Python ###
-# Python compiled files, virtual environments, and cache
-
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-pypackages/
-build/
-develop-eggs/
-dist/
-downloads/
-
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-
-.installed.cfg
-*.egg
-MANIFEST
-.venv
-env/
-
-venv/
-ENV/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# PyInstaller
-*.manifest
-*.spec
-# Installer logs
-pip-log.txt
-
-pip-delete-this-directory.txt
-# Unit test / coverage reports
-.tox/
-.nox/
-.coverage.*
-
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-
-cover/
-# Translations
-*.mo
-*.pot
-# Django
-
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-# Flask
-instance/
-
-.webassets-cache
-# Scrapy
-.scrapy
-# Sphinx
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-# pyenv
-#.python-version
-
-# pipenv
-#Pipfile.lock
-# poetry
-#poetry.lock
-# pdm
-
-.pdm.toml
-__pypackages__/
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath
-*.sage.py
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
-# mkdocs
-/site
-# mypy
-
-.mypy_cache/
-.dmypy.json
-dmypy.json
-# Pyre
-.pyre/
-
-# pytype
-.pytype/
-# Cython
-cython_debug/
-# Poetry
-
-poetry.toml
-# ruff
-.ruff_cache/
-# LSP
-pyrightconfig.json
-
-*.sage.py
-.pdm.toml
-profile_default/
-.nox/
-.spyproject
-
-site/
-
-### React ###
-# React build directory and environment files
-
-build/
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# Testing
+coverage
+
+# Turbo
+.turbo
+
+# Vercel
+.vercel
+
+# Build Outputs
+.next/
+out/
+build
+dist
+
+
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.DS_*
-**/*.backup.*
 
-**/*.back.*
-*.sublime*
-psd
-thumb
-sketch
-
-coverage/
-
-### Next_js ###
-# next_js specific files
-
-.next/
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-### Git ###
-# Git version control system files and directories
-
-# Git
-.git/
-.gitignore
-.gitattributes
-.gitmodules
-
-.git-rewrite/
-/.git-credentials
-.git-blame-ignore-revs
-*.git
-.gitkeep
-
-.git-old/
-.gitconfig
-.github/
-.gitreview
-.gitk
-
-.gitstats
-.gitchangelog.rc
-.git-blame*
-.git-rewrite/
-.gitmessage
-
-.gitflow
-git.properties
-.git-blame-ignore
-.gitkeep
-.gitattributes.local
-
-.git/lfs/
-.git-crypt/
-.gitflow.default
-.gitlint
-.gitversion
-
-.gitsecret/
-.git/hooks/
-.git-credentials.local
-
-### Javascript ###
-# javascript specific files
-
-node_modules/
-*.log
-npm-debug.log*
-yarn-debug.log*
-.cache/
-
-dist/
-coverage/
-
-### Pycharm ###
-# pycharm editor specific files
-
-# PyCharm
-.idea/
-*.iws
-*.iml
-*.ipr
-
-.idea_modules/
-out/
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/dictionaries
-
-.idea/misc.xml
-.idea/modules.xml
-.idea/vcs.xml
-.idea/jsLibraryMappings.xml
-.idea/datasources.xml
-
-.idea/dataSources.ids
-.idea/sqlDataSources.xml
-.idea/dynamic.xml
-.idea/uiDesigner.xml
-.idea/inspectionProfiles/
+# Misc
+.DS_Store
+*.pem
