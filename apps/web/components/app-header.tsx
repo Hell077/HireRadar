@@ -1,9 +1,17 @@
 import Link from "next/link";
 import { Bell, Radar } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
-const navigation = ["Profile", "Jobs", "Saved", "Settings"];
+import { LanguageSwitcher } from "@/components/language-switcher";
 
-export function AppHeader() {
+export async function AppHeader() {
+  const t = await getTranslations("nav");
+  const navigation = [
+    { label: t("profile"), href: "/", active: true },
+    { label: t("jobs"), href: "/jobs" },
+    { label: t("saved"), href: "/saved" },
+    { label: t("settings"), href: "/settings" },
+  ];
   return (
     <header className="border-border bg-card border-b">
       <div className="mx-auto flex h-18 max-w-[1440px] items-center justify-between px-5 md:px-14">
@@ -26,24 +34,25 @@ export function AppHeader() {
         >
           {navigation.map((item) => (
             <Link
-              key={item}
-              href={item === "Profile" ? "/" : `/${item.toLowerCase()}`}
+              key={item.href}
+              href={item.href}
               className={
-                item === "Profile"
+                item.active
                   ? "bg-accent text-accent-foreground rounded-lg px-3.5 py-2 text-sm font-semibold"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground rounded-lg px-3.5 py-2 text-sm font-medium transition-colors"
               }
             >
-              {item}
+              {item.label}
             </Link>
           ))}
         </nav>
 
         <div className="flex items-center gap-2.5">
+          <LanguageSwitcher />
           <button
             type="button"
             className="bg-secondary text-foreground grid size-9.5 place-items-center rounded-full"
-            aria-label="Notifications"
+            aria-label={t("notifications")}
           >
             <Bell className="size-4.5" aria-hidden="true" />
           </button>

@@ -1,47 +1,49 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { Button } from "@repo/ui/components/button";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthShell } from "@/components/auth/auth-shell";
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  const t = await getTranslations("auth");
   return (
     <AuthShell
-      title="Choose a new password"
-      description="Use at least 8 characters and avoid a password used elsewhere."
+      title={t("resetTitle")}
+      description={t("resetDescription")}
       footer={
         <Link
           className="font-medium text-primary hover:underline"
           href="/sign-in"
         >
-          Return to sign in
+          {t("returnSignIn")}
         </Link>
       }
     >
       <form className="space-y-5">
         <AuthField
           id="password"
-          label="New password"
+          label={t("newPassword")}
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="Enter a new password"
+          placeholder={t("enterNewPassword")}
           minLength={8}
           required
         />
         <AuthField
           id="confirm-password"
-          label="Confirm password"
+          label={t("confirmPassword")}
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
-          placeholder="Repeat your new password"
+          placeholder={t("repeatPassword")}
           minLength={8}
           required
         />
         <Button className="h-11 w-full" type="submit">
-          Update password
+          {t("updatePassword")}
         </Button>
       </form>
     </AuthShell>

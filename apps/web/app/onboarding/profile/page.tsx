@@ -1,22 +1,25 @@
 import { Card, CardContent } from "@repo/ui/components/card";
+import { getTranslations } from "next-intl/server";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
-export default function OnboardingProfilePage() {
+export default async function OnboardingProfilePage() {
+  const t = await getTranslations("onboarding");
+  const auth = await getTranslations("auth");
   return (
     <OnboardingShell
       step={1}
-      title="Tell us what you do"
-      description="This information gives the resume parser a useful starting point and improves your first recommendations."
+      title={t("profileTitle")}
+      description={t("profileDescription")}
     >
       <Card>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <AuthField
               id="full-name"
-              label="Full name"
+              label={auth("fullName")}
               name="fullName"
               autoComplete="name"
               defaultValue="Timur K."
@@ -24,13 +27,13 @@ export default function OnboardingProfilePage() {
           </div>
           <AuthField
             id="current-role"
-            label="Current role"
+            label={t("currentRole")}
             name="currentRole"
-            placeholder="Golang developer"
+            placeholder={t("rolePlaceholder")}
           />
           <AuthField
             id="experience"
-            label="Years of experience"
+            label={t("experience")}
             name="experience"
             type="number"
             min={0}
@@ -38,14 +41,14 @@ export default function OnboardingProfilePage() {
           />
           <AuthField
             id="location"
-            label="Current location"
+            label={t("location")}
             name="location"
             autoComplete="country-name"
-            placeholder="Kazakhstan"
+            placeholder={t("locationPlaceholder")}
           />
           <AuthField
             id="timezone"
-            label="Time zone"
+            label={t("timezone")}
             name="timezone"
             placeholder="UTC+5"
           />

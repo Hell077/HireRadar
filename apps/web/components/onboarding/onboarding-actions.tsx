@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@repo/ui/components/button";
@@ -9,18 +10,19 @@ type OnboardingActionsProps = {
   nextLabel?: string;
 };
 
-export function OnboardingActions({
+export async function OnboardingActions({
   backHref,
   nextHref,
-  nextLabel = "Continue",
+  nextLabel,
 }: OnboardingActionsProps) {
+  const t = await getTranslations("common");
   return (
     <div className="mt-8 flex items-center justify-between gap-4 border-t pt-6">
       {backHref ? (
         <Button asChild variant="ghost">
           <Link href={backHref}>
             <ArrowLeft aria-hidden="true" />
-            Back
+            {t("back")}
           </Link>
         </Button>
       ) : (
@@ -28,7 +30,7 @@ export function OnboardingActions({
       )}
       <Button asChild size="lg">
         <Link href={nextHref}>
-          {nextLabel}
+          {nextLabel ?? t("continue")}
           <ArrowRight aria-hidden="true" />
         </Link>
       </Button>

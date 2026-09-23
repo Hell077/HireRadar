@@ -114,4 +114,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: semantic Tailwind foundation, shared shadcn/ui setup, responsive profile page.
 - Complete: responsive sign-in, registration, password recovery, and password reset screens using a shared authentication shell.
 - Complete: profile onboarding, resume upload, extracted-data review, job preferences, and Telegram connection preference.
+- Complete: English and Russian localization with `next-intl`; the selected locale is stored in a first-party cookie and does not change route URLs.
 - Next: personalized job feed, job details, saved jobs, and source settings.

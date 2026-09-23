@@ -1,11 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 
 import { Check } from "lucide-react";
 
 import { Reveal } from "@/components/motion/reveal";
-
-const steps = ["Profile", "Resume", "Review", "Preferences"];
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type OnboardingShellProps = {
   children: ReactNode;
@@ -14,12 +14,19 @@ type OnboardingShellProps = {
   title: string;
 };
 
-export function OnboardingShell({
+export async function OnboardingShell({
   children,
   description,
   step,
   title,
 }: OnboardingShellProps) {
+  const t = await getTranslations("onboarding");
+  const steps = [
+    t("steps.profile"),
+    t("steps.resume"),
+    t("steps.review"),
+    t("steps.preferences"),
+  ];
   return (
     <main className="min-h-svh bg-background">
       <header className="border-b bg-card">
@@ -30,9 +37,12 @@ export function OnboardingShell({
             </span>
             HireRadar
           </Link>
-          <span className="text-sm text-muted-foreground">
-            Step {step} of 4
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {t("step", { current: step })}
+            </span>
+            <LanguageSwitcher />
+          </div>
         </div>
       </header>
 
@@ -40,7 +50,7 @@ export function OnboardingShell({
         <Reveal delay={0.02}>
           <ol
             className="mb-10 grid grid-cols-4"
-            aria-label="Profile setup progress"
+            aria-label={t("progressLabel")}
           >
             {steps.map((label, index) => {
               const number = index + 1;

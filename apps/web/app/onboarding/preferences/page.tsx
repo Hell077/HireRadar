@@ -1,4 +1,5 @@
 import { BriefcaseBusiness, Clock3, Globe2, Send } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import {
   Card,
   CardContent,
@@ -10,56 +11,57 @@ import { ChoiceCard } from "@/components/onboarding/choice-card";
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
-export default function OnboardingPreferencesPage() {
+export default async function OnboardingPreferencesPage() {
+  const t = await getTranslations("onboarding");
   return (
     <OnboardingShell
       step={4}
-      title="Set your search preferences"
-      description="Choose what should count as a strong match. You can change these settings at any time."
+      title={t("preferencesTitle")}
+      description={t("preferencesDescription")}
     >
       <div className="space-y-5">
         <Card>
           <CardHeader>
-            <CardTitle>Target roles</CardTitle>
+            <CardTitle>{t("targetRoles")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <ChoiceCard name="roles" label="Golang / Backend" checked />
-            <ChoiceCard name="roles" label="Frontend / React" checked />
-            <ChoiceCard name="roles" label="Full stack" checked />
-            <ChoiceCard name="roles" label="Engineering lead" />
+            <ChoiceCard name="roles" label={t("backend")} checked />
+            <ChoiceCard name="roles" label={t("frontend")} checked />
+            <ChoiceCard name="roles" label={t("fullstack")} checked />
+            <ChoiceCard name="roles" label={t("lead")} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Work preferences</CardTitle>
+            <CardTitle>{t("workPreferences")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <ChoiceCard
               name="region"
-              label="Worldwide remote"
-              description="No country restriction"
+              label={t("worldwide")}
+              description={t("worldwideHelp")}
               icon={<Globe2 className="size-4" aria-hidden="true" />}
               checked
             />
             <ChoiceCard
               name="region"
-              label="EMEA"
-              description="Europe, Middle East and Africa"
+              label={t("emea")}
+              description={t("emeaHelp")}
               icon={<Clock3 className="size-4" aria-hidden="true" />}
               checked
             />
             <ChoiceCard
               name="employment"
-              label="Contract / B2B"
-              description="Suitable for a second engagement"
+              label={t("contract")}
+              description={t("contractHelp")}
               icon={<BriefcaseBusiness className="size-4" aria-hidden="true" />}
               checked
             />
             <ChoiceCard
               name="employment"
-              label="Full-time"
-              description="Remote permanent positions"
+              label={t("fulltime")}
+              description={t("fulltimeHelp")}
               icon={<BriefcaseBusiness className="size-4" aria-hidden="true" />}
             />
           </CardContent>
@@ -67,13 +69,13 @@ export default function OnboardingPreferencesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Telegram notifications</CardTitle>
+            <CardTitle>{t("telegram")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ChoiceCard
               name="telegram"
-              label="Connect Telegram after setup"
-              description="Receive high-quality matches without checking the website. We’ll open the bot after you finish."
+              label={t("connectTelegram")}
+              description={t("telegramHelp")}
               icon={<Send className="size-4" aria-hidden="true" />}
               checked
             />
@@ -84,7 +86,7 @@ export default function OnboardingPreferencesPage() {
       <OnboardingActions
         backHref="/onboarding/review"
         nextHref="/"
-        nextLabel="Finish setup"
+        nextLabel={t("finish")}
       />
     </OnboardingShell>
   );

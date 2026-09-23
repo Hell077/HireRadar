@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { BriefcaseBusiness, Bookmark, Settings, UserRound } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-
-const items = [
-  { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
-  { label: "Saved", href: "/saved", icon: Bookmark },
-  { label: "Profile", href: "/", icon: UserRound, active: true },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+import { useTranslations } from "next-intl";
 
 export function MobileNavigation() {
   const reduceMotion = useReducedMotion();
+  const t = useTranslations("nav");
+  const items = [
+    { label: t("jobs"), href: "/jobs", icon: BriefcaseBusiness },
+    { label: t("saved"), href: "/saved", icon: Bookmark },
+    { label: t("profile"), href: "/", icon: UserRound, active: true },
+    { label: t("settings"), href: "/settings", icon: Settings },
+  ];
 
   return (
     <motion.nav

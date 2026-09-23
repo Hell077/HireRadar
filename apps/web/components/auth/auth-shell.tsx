@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { getTranslations } from "next-intl/server";
 
 import {
   Card,
@@ -10,6 +11,7 @@ import {
 } from "@repo/ui/components/card";
 
 import { Reveal } from "@/components/motion/reveal";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type AuthShellProps = {
   children: ReactNode;
@@ -18,12 +20,14 @@ type AuthShellProps = {
   title: string;
 };
 
-export function AuthShell({
+export async function AuthShell({
   children,
   description,
   footer,
   title,
 }: AuthShellProps) {
+  const t = await getTranslations("auth");
+
   return (
     <main className="grid min-h-svh bg-background lg:grid-cols-[minmax(0,1fr)_minmax(32rem,0.8fr)]">
       <section className="relative hidden overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
@@ -41,30 +45,28 @@ export function AuthShell({
 
         <Reveal className="max-w-xl space-y-5" delay={0.08} distance={20}>
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary-foreground/70">
-            Focused remote job search
+            {t("eyebrow")}
           </p>
           <h2 className="text-balance text-4xl font-semibold leading-tight xl:text-5xl">
-            Relevant vacancies, collected around your actual experience.
+            {t("heroTitle")}
           </h2>
           <p className="max-w-lg text-lg leading-8 text-primary-foreground/75">
-            Set your preferences once. HireRadar checks selected sources and
-            sends the strongest matches to Telegram.
+            {t("heroText")}
           </p>
         </Reveal>
 
-        <p className="text-sm text-primary-foreground/60">
-          Built for remote developers
-        </p>
+        <p className="text-sm text-primary-foreground/60">{t("heroFooter")}</p>
       </section>
 
       <section className="flex min-h-svh flex-col">
-        <header className="flex h-20 items-center px-5 sm:px-8 lg:hidden">
+        <header className="flex h-20 items-center justify-between px-5 sm:px-8 lg:hidden">
           <Link href="/" className="flex items-center gap-2.5 font-semibold">
             <span className="grid size-9 place-items-center rounded-lg bg-primary text-xs text-primary-foreground">
               HR
             </span>
             HireRadar
           </Link>
+          <LanguageSwitcher />
         </header>
 
         <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">

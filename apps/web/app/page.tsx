@@ -8,6 +8,7 @@ import {
   Send,
   Upload,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 
 import { Button } from "@repo/ui/components/button";
 
@@ -34,7 +35,8 @@ function SectionHeading({ title, action }: { title: string; action?: string }) {
   );
 }
 
-export default function ProfilePage() {
+export default async function ProfilePage() {
+  const t = await getTranslations("profile");
   return (
     <div className="min-h-screen pb-24 md:pb-0">
       <AppHeader />
@@ -48,16 +50,16 @@ export default function ProfilePage() {
             <div className="min-w-0 flex-1">
               <h1 className="text-[27px] font-bold tracking-tight">Timur K.</h1>
               <p className="text-muted-foreground mt-1 text-[15px] font-medium">
-                Golang & Frontend Developer
+                {t("role")}
               </p>
               <p className="text-muted-foreground mt-2 flex items-center justify-center gap-1.5 text-xs sm:justify-start">
                 <MapPin className="size-3.5" aria-hidden="true" />
-                Kazakhstan · Open to worldwide remote
+                {t("location")}
               </p>
             </div>
             <Button variant="outline" size="lg">
               <Pencil aria-hidden="true" />
-              Edit profile
+              {t("editProfile")}
             </Button>
           </section>
         </Reveal>
@@ -71,14 +73,14 @@ export default function ProfilePage() {
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <SectionHeading title="Resume" />
+                  <SectionHeading title={t("resume")} />
                   <p className="text-muted-foreground mt-1 text-xs">
-                    Used to understand your experience and improve matches
+                    {t("resumeHelp")}
                   </p>
                 </div>
                 <Button variant="outline" size="sm">
                   <Upload aria-hidden="true" />
-                  Replace
+                  {t("replace")}
                 </Button>
               </div>
 
@@ -91,14 +93,14 @@ export default function ProfilePage() {
                     timur-k-resume.pdf
                   </p>
                   <p className="text-muted-foreground mt-0.5 text-[11px]">
-                    Updated today · Profile data confirmed
+                    {t("resumeStatus")}
                   </p>
                 </div>
               </div>
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
-              <SectionHeading title="Skills" action="Edit" />
+              <SectionHeading title={t("skills")} action={t("editProfile")} />
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.map((skill) => (
                   <span
@@ -112,12 +114,15 @@ export default function ProfilePage() {
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
-              <SectionHeading title="Job preferences" action="Edit" />
+              <SectionHeading
+                title={t("jobPreferences")}
+                action={t("editProfile")}
+              />
               <dl className="mt-5 grid gap-5 sm:grid-cols-3">
                 {[
-                  ["Roles", "Go · Frontend · Full stack"],
-                  ["Remote region", "Worldwide · EMEA"],
-                  ["Employment", "Contract · B2B · Full-time"],
+                  [t("roles"), t("rolesValue")],
+                  [t("remoteRegion"), t("regionValue")],
+                  [t("employment"), t("employmentValue")],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-muted-foreground text-[11px] font-semibold">
@@ -135,14 +140,14 @@ export default function ProfilePage() {
           <aside className="space-y-4">
             <section className="border-border bg-card rounded-xl border p-5">
               <div className="flex items-center justify-between text-sm font-semibold">
-                <span>Profile completeness</span>
+                <span>{t("completeness")}</span>
                 <span className="text-primary">82%</span>
               </div>
               <div className="bg-secondary mt-3 h-1.5 overflow-hidden rounded-full">
                 <div className="bg-primary h-full w-[82%] rounded-full" />
               </div>
               <p className="text-muted-foreground mt-3 text-xs leading-5">
-                Add salary expectations to improve your recommendations.
+                {t("completenessHelp")}
               </p>
             </section>
 
@@ -152,37 +157,37 @@ export default function ProfilePage() {
                   <Send className="size-4" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="text-sm font-semibold">Telegram</h2>
+                  <h2 className="text-sm font-semibold">{t("telegram")}</h2>
                   <p className="text-muted-foreground text-[11px]">
-                    Not connected
+                    {t("notConnected")}
                   </p>
                 </div>
               </div>
               <p className="text-muted-foreground mt-4 text-xs leading-5">
-                Receive new job matches without keeping the website open.
+                {t("telegramHelp")}
               </p>
               <Button className="mt-4 w-full" size="lg">
                 <LinkIcon aria-hidden="true" />
-                Connect Telegram
+                {t("connectTelegram")}
               </Button>
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5">
               <div className="flex items-center gap-2">
                 <BellRing className="text-primary size-4" aria-hidden="true" />
-                <h2 className="text-sm font-semibold">Vacancy sources</h2>
+                <h2 className="text-sm font-semibold">{t("sources")}</h2>
               </div>
               <p className="mt-3 text-[13px] font-semibold">
-                8 sources enabled
+                {t("sourcesEnabled")}
               </p>
               <p className="text-muted-foreground mt-1 text-[11px] leading-4">
-                Greenhouse, Lever, Ashby, Remotive and 4 more
+                {t("sourcesList")}
               </p>
             </section>
 
             <div className="bg-success-soft text-success flex items-center gap-2 rounded-lg px-4 py-3 text-xs font-semibold">
               <Check className="size-4" aria-hidden="true" />
-              Resume data confirmed
+              {t("confirmed")}
             </div>
           </aside>
         </Reveal>

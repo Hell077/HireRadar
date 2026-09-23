@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { FileText, ShieldCheck, Upload } from "lucide-react";
 import { Button } from "@repo/ui/components/button";
@@ -7,12 +8,13 @@ import { Card, CardContent } from "@repo/ui/components/card";
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
-export default function OnboardingResumePage() {
+export default async function OnboardingResumePage() {
+  const t = await getTranslations("onboarding");
   return (
     <OnboardingShell
       step={2}
-      title="Add your resume"
-      description="We’ll extract your roles, experience and skills. You can review every field before it becomes part of your profile."
+      title={t("resumeTitle")}
+      description={t("resumeDescription")}
     >
       <Card>
         <CardContent>
@@ -22,14 +24,14 @@ export default function OnboardingResumePage() {
               <Upload className="size-5" aria-hidden="true" />
             </span>
             <span className="mt-5 text-base font-semibold">
-              Drop your resume here
+              {t("dropResume")}
             </span>
             <span className="mt-2 text-sm text-muted-foreground">
-              PDF or DOCX, up to 10 MB
+              {t("fileHelp")}
             </span>
             <Button className="mt-5" type="button" variant="outline">
               <FileText aria-hidden="true" />
-              Choose file
+              {t("chooseFile")}
             </Button>
           </label>
 
@@ -38,19 +40,16 @@ export default function OnboardingResumePage() {
               className="mt-0.5 size-5 shrink-0"
               aria-hidden="true"
             />
-            <p className="text-xs leading-5">
-              Your resume is private and is used only to build your profile and
-              rank vacancies. You can replace or delete it later.
-            </p>
+            <p className="text-xs leading-5">{t("privacy")}</p>
           </div>
 
           <p className="mt-5 text-center text-sm text-muted-foreground">
-            Prefer manual setup?{" "}
+            {t("manual")}{" "}
             <Link
               className="font-medium text-primary hover:underline"
               href="/onboarding/review"
             >
-              Skip upload
+              {t("skip")}
             </Link>
           </p>
         </CardContent>
@@ -58,7 +57,7 @@ export default function OnboardingResumePage() {
       <OnboardingActions
         backHref="/onboarding/profile"
         nextHref="/onboarding/review"
-        nextLabel="Review profile"
+        nextLabel={t("reviewProfile")}
       />
     </OnboardingShell>
   );

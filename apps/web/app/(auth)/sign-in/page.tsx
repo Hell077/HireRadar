@@ -1,23 +1,25 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { Button } from "@repo/ui/components/button";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthShell } from "@/components/auth/auth-shell";
 
-export default function SignInPage() {
+export default async function SignInPage() {
+  const t = await getTranslations("auth");
   return (
     <AuthShell
-      title="Welcome back"
-      description="Sign in to review new job matches and manage your search."
+      title={t("signInTitle")}
+      description={t("signInDescription")}
       footer={
         <>
-          New to HireRadar?{" "}
+          {t("newHere")}{" "}
           <Link
             className="font-medium text-primary hover:underline"
             href="/register"
           >
-            Create an account
+            {t("createAccount")}
           </Link>
         </>
       }
@@ -25,32 +27,32 @@ export default function SignInPage() {
       <form className="space-y-5">
         <AuthField
           id="email"
-          label="Email"
+          label={t("email")}
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder={t("emailPlaceholder")}
           required
         />
         <AuthField
           id="password"
-          label="Password"
+          label={t("password")}
           name="password"
           type="password"
           autoComplete="current-password"
-          placeholder="Enter your password"
+          placeholder={t("passwordPlaceholder")}
           required
           trailing={
             <Link
               className="text-sm text-primary hover:underline"
               href="/forgot-password"
             >
-              Forgot password?
+              {t("forgotPassword")}
             </Link>
           }
         />
         <Button className="h-11 w-full" type="submit">
-          Sign in
+          {t("signIn")}
         </Button>
       </form>
     </AuthShell>

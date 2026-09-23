@@ -1,4 +1,5 @@
 import { Check, X } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import {
   Card,
   CardContent,
@@ -19,33 +20,34 @@ const extractedSkills = [
   "Docker",
 ];
 
-export default function OnboardingReviewPage() {
+export default async function OnboardingReviewPage() {
+  const t = await getTranslations("onboarding");
   return (
     <OnboardingShell
       step={3}
-      title="Check your profile"
-      description="We extracted the following information from your resume. Correct anything that does not look right."
+      title={t("reviewTitle")}
+      description={t("reviewDescription")}
     >
       <div className="mb-5 flex items-center gap-3 rounded-xl bg-success-soft p-4 text-success">
         <Check className="size-5 shrink-0" aria-hidden="true" />
-        <p className="text-sm font-medium">Resume processed successfully</p>
+        <p className="text-sm font-medium">{t("processed")}</p>
       </div>
 
       <div className="space-y-5">
         <Card>
           <CardHeader>
-            <CardTitle>Professional summary</CardTitle>
+            <CardTitle>{t("summary")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
             <AuthField
               id="review-role"
-              label="Primary role"
+              label={t("primaryRole")}
               name="role"
               defaultValue="Golang & Frontend Developer"
             />
             <AuthField
               id="review-experience"
-              label="Years of experience"
+              label={t("experience")}
               name="experience"
               type="number"
               defaultValue="5"
@@ -55,7 +57,7 @@ export default function OnboardingReviewPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Detected skills</CardTitle>
+            <CardTitle>{t("skills")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -68,7 +70,7 @@ export default function OnboardingReviewPage() {
                   <button
                     className="rounded-full text-muted-foreground hover:text-foreground"
                     type="button"
-                    aria-label={`Remove ${skill}`}
+                    aria-label={t("removeSkill", { skill })}
                   >
                     <X className="size-3.5" aria-hidden="true" />
                   </button>
@@ -78,7 +80,7 @@ export default function OnboardingReviewPage() {
                 className="rounded-full border border-dashed px-3 py-2 text-sm font-medium text-primary hover:bg-accent"
                 type="button"
               >
-                + Add skill
+                {t("addSkill")}
               </button>
             </div>
           </CardContent>
@@ -86,18 +88,18 @@ export default function OnboardingReviewPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent experience</CardTitle>
+            <CardTitle>{t("recentExperience")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
             <AuthField
               id="company"
-              label="Company"
+              label={t("company")}
               name="company"
               defaultValue="Product company"
             />
             <AuthField
               id="position"
-              label="Position"
+              label={t("position")}
               name="position"
               defaultValue="Software Engineer"
             />
@@ -108,7 +110,7 @@ export default function OnboardingReviewPage() {
       <OnboardingActions
         backHref="/onboarding/resume"
         nextHref="/onboarding/preferences"
-        nextLabel="Confirm details"
+        nextLabel={t("confirm")}
       />
     </OnboardingShell>
   );

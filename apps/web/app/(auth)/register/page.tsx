@@ -1,23 +1,25 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { Button } from "@repo/ui/components/button";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthShell } from "@/components/auth/auth-shell";
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  const t = await getTranslations("auth");
   return (
     <AuthShell
-      title="Create your account"
-      description="Start with your contact details. Your job profile comes next."
+      title={t("registerTitle")}
+      description={t("registerDescription")}
       footer={
         <>
-          Already have an account?{" "}
+          {t("alreadyAccount")}{" "}
           <Link
             className="font-medium text-primary hover:underline"
             href="/sign-in"
           >
-            Sign in
+            {t("signIn")}
           </Link>
         </>
       }
@@ -25,37 +27,34 @@ export default function RegisterPage() {
       <form className="space-y-5">
         <AuthField
           id="name"
-          label="Full name"
+          label={t("fullName")}
           name="name"
           autoComplete="name"
-          placeholder="Alex Morgan"
+          placeholder={t("namePlaceholder")}
           required
         />
         <AuthField
           id="email"
-          label="Email"
+          label={t("email")}
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder={t("emailPlaceholder")}
           required
         />
         <AuthField
           id="password"
-          label="Password"
+          label={t("password")}
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="At least 8 characters"
+          placeholder={t("newPasswordPlaceholder")}
           minLength={8}
           required
         />
-        <p className="text-xs leading-5 text-muted-foreground">
-          By creating an account, you agree to the Terms of Service and Privacy
-          Policy.
-        </p>
+        <p className="text-xs leading-5 text-muted-foreground">{t("terms")}</p>
         <Button asChild className="h-11 w-full">
-          <Link href="/onboarding/profile">Create account</Link>
+          <Link href="/onboarding/profile">{t("createAccount")}</Link>
         </Button>
       </form>
     </AuthShell>
