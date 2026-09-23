@@ -32,8 +32,8 @@ Implementation remains fluid between breakpoints; the frames are design referenc
 
 ### Desktop navigation
 
-- Persistent left sidebar for primary product areas.
-- Compact top bar for search, notifications, and account actions when required.
+- Persistent top header for primary product areas, notifications, and account actions.
+- Keep the same navigation placement across desktop product screens.
 - Main content uses a readable maximum width instead of stretching across the viewport.
 - Job list and job details may use a split view where space permits.
 
@@ -106,3 +106,9 @@ Motion should explain state changes and preserve spatial continuity. Use it for 
 5. Design onboarding, authentication, and settings using the established system.
 6. Validate responsive behavior and component states.
 7. Implement the approved screens with shadcn/ui, Tailwind CSS, and Motion.
+
+## Implementation status
+
+- Complete: semantic Tailwind foundation, shared shadcn/ui setup, responsive profile page.
+- Complete: responsive sign-in, registration, password recovery, and password reset screens using a shared authentication shell.
+- Next: profile onboarding, resume upload, extracted-data review, job preferences, and Telegram connection.
