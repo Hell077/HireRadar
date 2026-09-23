@@ -2,8 +2,12 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
+    "backend#build": {
+      "outputs": []
+    },
     "build": {
       "dependsOn": ["^build"],
+      "env": ["BACKEND_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
@@ -14,6 +18,7 @@
       "dependsOn": ["^check-types"]
     },
     "dev": {
+      "env": ["BACKEND_URL"],
       "cache": false,
       "persistent": true
     }

@@ -1,0 +1,9 @@
+{
+  "name": "backend",
+  "private": true,
+  "scripts": {
+    "dev": "go run ./cmd",
+    "build": "go build ./...",
+    "check-types": "go vet ./..."
+  }
+}

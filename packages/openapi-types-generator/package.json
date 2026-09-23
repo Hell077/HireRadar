@@ -1,0 +1,14 @@
+{
+  "name": "@repo/openapi-types-generator",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "openapi-typescript": "^7.13.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
