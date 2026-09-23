@@ -111,4 +111,5 @@ Motion should explain state changes and preserve spatial continuity. Use it for 
 
 - Complete: semantic Tailwind foundation, shared shadcn/ui setup, responsive profile page.
 - Complete: responsive sign-in, registration, password recovery, and password reset screens using a shared authentication shell.
-- Next: profile onboarding, resume upload, extracted-data review, job preferences, and Telegram connection.
+- Complete: profile onboarding, resume upload, extracted-data review, job preferences, and Telegram connection preference.
+- Next: personalized job feed, job details, saved jobs, and source settings.

@@ -13,7 +13,10 @@ export default function RegisterPage() {
       footer={
         <>
           Already have an account?{" "}
-          <Link className="font-medium text-primary hover:underline" href="/sign-in">
+          <Link
+            className="font-medium text-primary hover:underline"
+            href="/sign-in"
+          >
             Sign in
           </Link>
         </>
@@ -51,8 +54,8 @@ export default function RegisterPage() {
           By creating an account, you agree to the Terms of Service and Privacy
           Policy.
         </p>
-        <Button className="h-11 w-full" type="submit">
-          Create account
+        <Button asChild className="h-11 w-full">
+          <Link href="/onboarding/profile">Create account</Link>
         </Button>
       </form>
     </AuthShell>
