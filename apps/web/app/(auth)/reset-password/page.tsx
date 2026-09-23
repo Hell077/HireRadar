@@ -11,7 +11,10 @@ export default function ResetPasswordPage() {
       title="Choose a new password"
       description="Use at least 8 characters and avoid a password used elsewhere."
       footer={
-        <Link className="font-medium text-primary hover:underline" href="/sign-in">
+        <Link
+          className="font-medium text-primary hover:underline"
+          href="/sign-in"
+        >
           Return to sign in
         </Link>
       }

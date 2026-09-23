@@ -87,6 +87,8 @@ Motion should explain state changes and preserve spatial continuity. Use it for 
 - Respect `prefers-reduced-motion`.
 - Use CSS transitions for simple color and opacity changes; use Motion only for coordinated, layout, gesture, or presence animation.
 
+Implementation uses shared Motion reveal and route-transition primitives rather than screen-specific timing logic. Interactive controls use short CSS transitions, while operating-system reduced-motion preferences disable movement globally.
+
 ## Pen.dev workflow
 
 - Store design files in the repository so design changes can be reviewed alongside code.

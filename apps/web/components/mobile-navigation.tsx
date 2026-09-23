@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { BriefcaseBusiness, Bookmark, Settings, UserRound } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
 const items = [
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
@@ -9,10 +12,19 @@ const items = [
 ];
 
 export function MobileNavigation() {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <nav
+    <motion.nav
       className="border-border bg-card fixed inset-x-4 bottom-3 z-20 flex h-15 items-center gap-1 rounded-full border p-1.5 shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_10%,transparent)] md:hidden"
       aria-label="Mobile navigation"
+      initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        delay: reduceMotion ? 0 : 0.18,
+        duration: reduceMotion ? 0 : 0.4,
+        ease: [0.22, 1, 0.36, 1],
+      }}
     >
       {items.map(({ label, href, icon: Icon, active }) => (
         <Link
@@ -28,6 +40,6 @@ export function MobileNavigation() {
           {label}
         </Link>
       ))}
-    </nav>
+    </motion.nav>
   );
 }

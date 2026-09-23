@@ -13,7 +13,10 @@ export default function SignInPage() {
       footer={
         <>
           New to HireRadar?{" "}
-          <Link className="font-medium text-primary hover:underline" href="/register">
+          <Link
+            className="font-medium text-primary hover:underline"
+            href="/register"
+          >
             Create an account
           </Link>
         </>
@@ -38,7 +41,10 @@ export default function SignInPage() {
           placeholder="Enter your password"
           required
           trailing={
-            <Link className="text-sm text-primary hover:underline" href="/forgot-password">
+            <Link
+              className="text-sm text-primary hover:underline"
+              href="/forgot-password"
+            >
               Forgot password?
             </Link>
           }

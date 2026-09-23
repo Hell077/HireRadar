@@ -13,6 +13,7 @@ import { Button } from "@repo/ui/components/button";
 
 import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
+import { Reveal } from "@/components/motion/reveal";
 
 const skills = ["Go", "React", "Next.js", "TypeScript", "PostgreSQL", "Docker"];
 
@@ -39,27 +40,33 @@ export default function ProfilePage() {
       <AppHeader />
 
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 md:py-12">
-        <section className="border-border flex flex-col items-center gap-5 border-b pb-8 text-center sm:flex-row sm:text-left">
-          <div className="bg-accent text-accent-foreground grid size-19 shrink-0 place-items-center rounded-3xl text-xl font-bold">
-            TK
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[27px] font-bold tracking-tight">Timur K.</h1>
-            <p className="text-muted-foreground mt-1 text-[15px] font-medium">
-              Golang & Frontend Developer
-            </p>
-            <p className="text-muted-foreground mt-2 flex items-center justify-center gap-1.5 text-xs sm:justify-start">
-              <MapPin className="size-3.5" aria-hidden="true" />
-              Kazakhstan · Open to worldwide remote
-            </p>
-          </div>
-          <Button variant="outline" size="lg">
-            <Pencil aria-hidden="true" />
-            Edit profile
-          </Button>
-        </section>
+        <Reveal>
+          <section className="border-border flex flex-col items-center gap-5 border-b pb-8 text-center sm:flex-row sm:text-left">
+            <div className="bg-accent text-accent-foreground grid size-19 shrink-0 place-items-center rounded-3xl text-xl font-bold">
+              TK
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[27px] font-bold tracking-tight">Timur K.</h1>
+              <p className="text-muted-foreground mt-1 text-[15px] font-medium">
+                Golang & Frontend Developer
+              </p>
+              <p className="text-muted-foreground mt-2 flex items-center justify-center gap-1.5 text-xs sm:justify-start">
+                <MapPin className="size-3.5" aria-hidden="true" />
+                Kazakhstan · Open to worldwide remote
+              </p>
+            </div>
+            <Button variant="outline" size="lg">
+              <Pencil aria-hidden="true" />
+              Edit profile
+            </Button>
+          </section>
+        </Reveal>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-[minmax(0,1fr)_320px]">
+        <Reveal
+          className="mt-8 grid gap-6 md:grid-cols-[minmax(0,1fr)_320px]"
+          delay={0.08}
+          distance={18}
+        >
           <div className="space-y-6">
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -178,7 +185,7 @@ export default function ProfilePage() {
               Resume data confirmed
             </div>
           </aside>
-        </div>
+        </Reveal>
       </main>
 
       <MobileNavigation />
