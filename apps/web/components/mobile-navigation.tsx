@@ -5,14 +5,25 @@ import { BriefcaseBusiness, Bookmark, Settings, UserRound } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 
-export function MobileNavigation() {
+type NavigationItem = "profile" | "jobs" | "saved" | "settings";
+
+export function MobileNavigation({
+  active = "profile",
+}: {
+  active?: NavigationItem;
+}) {
   const reduceMotion = useReducedMotion();
   const t = useTranslations("nav");
   const items = [
-    { label: t("jobs"), href: "/jobs", icon: BriefcaseBusiness },
-    { label: t("saved"), href: "/saved", icon: Bookmark },
-    { label: t("profile"), href: "/", icon: UserRound, active: true },
-    { label: t("settings"), href: "/settings", icon: Settings },
+    { key: "jobs", label: t("jobs"), href: "/jobs", icon: BriefcaseBusiness },
+    { key: "saved", label: t("saved"), href: "/saved", icon: Bookmark },
+    { key: "profile", label: t("profile"), href: "/", icon: UserRound },
+    {
+      key: "settings",
+      label: t("settings"),
+      href: "/settings",
+      icon: Settings,
+    },
   ];
 
   return (
@@ -27,12 +38,12 @@ export function MobileNavigation() {
         ease: [0.22, 1, 0.36, 1],
       }}
     >
-      {items.map(({ label, href, icon: Icon, active }) => (
+      {items.map(({ key, label, href, icon: Icon }) => (
         <Link
           key={label}
           href={href}
           className={
-            active
+            key === active
               ? "bg-accent text-accent-foreground flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-semibold"
               : "text-muted-foreground flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-medium"
           }

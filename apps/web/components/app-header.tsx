@@ -4,13 +4,19 @@ import { getTranslations } from "next-intl/server";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 
-export async function AppHeader() {
+type NavigationItem = "profile" | "jobs" | "saved" | "settings";
+
+export async function AppHeader({
+  active = "profile",
+}: {
+  active?: NavigationItem;
+}) {
   const t = await getTranslations("nav");
   const navigation = [
-    { label: t("profile"), href: "/", active: true },
-    { label: t("jobs"), href: "/jobs" },
-    { label: t("saved"), href: "/saved" },
-    { label: t("settings"), href: "/settings" },
+    { key: "profile", label: t("profile"), href: "/" },
+    { key: "jobs", label: t("jobs"), href: "/jobs" },
+    { key: "saved", label: t("saved"), href: "/saved" },
+    { key: "settings", label: t("settings"), href: "/settings" },
   ];
   return (
     <header className="border-border bg-card border-b">
@@ -37,7 +43,7 @@ export async function AppHeader() {
               key={item.href}
               href={item.href}
               className={
-                item.active
+                item.key === active
                   ? "bg-accent text-accent-foreground rounded-lg px-3.5 py-2 text-sm font-semibold"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground rounded-lg px-3.5 py-2 text-sm font-medium transition-colors"
               }
