@@ -14609,9 +14609,9 @@
     {
       "type": "frame",
       "id": "DrkF0",
-      "x": 6240,
+      "x": 3120,
       "y": 0,
-      "name": "Dark Theme — Foundations & Components",
+      "name": "Foundations — Dark Theme",
       "width": 1440,
       "height": 1120,
       "fill": "$background",
@@ -14654,7 +14654,7 @@
       ]
     },
     {
-      "type": "frame", "id": "PrfMn", "x": 6240, "y": 1280, "name": "Profile Menu — Desktop / Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" },
+      "type": "frame", "id": "PrfMn", "x": 6240, "y": 9850, "name": "Interaction Spec — Account Menu / Desktop Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" },
       "children": [
         { "type": "ref", "id": "PrfHd", "ref": "PjF37", "name": "Shared App Header / Dark", "x": 0, "y": 0 },
         { "type": "text", "id": "PrfBg", "x": 120, "y": 160, "fill": "$foreground", "content": "Profile menu interaction", "fontFamily": "$font-primary", "fontSize": 34, "fontWeight": "700" },
@@ -14672,7 +14672,7 @@
       ]
     },
     {
-      "type": "frame", "id": "JobIx", "x": 7800, "y": 1280, "name": "Job Card Interaction States — Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" }, "padding": 64, "layout": "vertical", "gap": 28,
+      "type": "frame", "id": "JobIx", "x": 9360, "y": 9850, "name": "Component Spec — Vacancy Card States / Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" }, "padding": 64, "layout": "vertical", "gap": 28,
       "children": [
         { "type": "text", "id": "JobIT", "fill": "$foreground", "content": "Vacancy interaction states", "fontFamily": "$font-primary", "fontSize": 34, "fontWeight": "700" },
         { "type": "text", "id": "JobID", "fill": "$muted-foreground", "content": "The complete card opens vacancy details. Nested Save remains an independent action.", "fontFamily": "$font-primary", "fontSize": 15 },
@@ -14685,7 +14685,7 @@
       ]
     },
     {
-      "type": "frame", "id": "NotPn", "x": 9360, "y": 1280, "name": "Notifications Panel — Desktop / Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" },
+      "type": "frame", "id": "NotPn", "x": 7800, "y": 9850, "name": "Interaction Spec — Notifications / Desktop Dark", "width": 1440, "height": 960, "fill": "$background", "theme": { "mode": "dark" },
       "children": [
         { "type": "ref", "id": "NotHd", "ref": "PjF37", "name": "Shared App Header / Dark", "x": 0, "y": 0 },
         { "type": "frame", "id": "NotDr", "name": "Notifications Dropdown", "x": 914, "y": 84, "width": 430, "fill": "$surface", "stroke": { "fill": "$border", "thickness": 1 }, "cornerRadius": 14, "padding": 20, "layout": "vertical", "gap": 16, "effect": { "type": "shadow", "color": "#00000055", "blur": 32, "offset": { "x": 0, "y": 12 } }, "children": [
@@ -14698,7 +14698,7 @@
       ]
     },
     {
-      "type": "frame", "id": "MobIx", "x": 2040, "y": 2750, "name": "Profile Menu & Notifications — Mobile / Dark", "width": 390, "height": 844, "fill": "$background", "theme": { "mode": "dark" },
+      "type": "frame", "id": "MobIx", "x": 2040, "y": 10950, "name": "Interaction Spec — Account Menu / Mobile Dark", "width": 390, "height": 844, "fill": "$background", "theme": { "mode": "dark" },
       "children": [
         { "type": "ref", "id": "MobHd", "ref": "qz4o0", "name": "Shared App Header / Mobile Dark", "x": 16, "y": 0 },
         { "type": "text", "id": "MobTi", "x": 20, "y": 104, "fill": "$foreground", "content": "Mobile account sheet", "fontFamily": "$font-primary", "fontSize": 24, "fontWeight": "700" },
