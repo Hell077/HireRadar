@@ -79,6 +79,17 @@ services:
         condition: service_healthy
     restart: "no"
 
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: "5000"
+    volumes:
+      - mailpit_data:/data
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
   api:
     build:
       context: ./apps/backend
@@ -102,7 +113,24 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  email-worker:
+    image: hireradar-backend:local
+    entrypoint: ["/app/email-worker"]
+    environment:
+      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SMTP_ADDRESS: mailpit:1025
+      SMTP_FROM: auth@hireradar.local
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+    depends_on:
+      api:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   rustfs_data:
+  mailpit_data:
