@@ -10,7 +10,7 @@ var ErrInvalidSkills = errors.New("invalid candidate skills")
 type Skill struct {
 	Name  string   `json:"name"`
 	Years *float64 `json:"years,omitempty"`
-	Level string   `json:"level"`
+	Level string   `json:"level,omitempty"`
 }
 
 func NormalizeSkills(skills []Skill) ([]Skill, error) {
