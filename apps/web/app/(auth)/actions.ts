@@ -1,7 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { storeTokens } from "@/lib/api/server";
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";
 
@@ -52,22 +53,7 @@ export async function signIn(formData: FormData) {
       status === 401 ? "invalid" : status === 429 ? "limited" : "unavailable";
     redirect(`/sign-in?error=${error}`);
   }
-  const jar = await cookies();
-  const secure = process.env.NODE_ENV === "production";
-  jar.set("hr_access", tokens.access_token, {
-    httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60,
-  });
-  jar.set("hr_refresh", tokens.refresh_token, {
-    httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 30 * 24 * 60 * 60,
-  });
+  await storeTokens(tokens as Parameters<typeof storeTokens>[0]);
   redirect("/onboarding/profile");
 }
 

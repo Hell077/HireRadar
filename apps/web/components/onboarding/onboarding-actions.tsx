@@ -8,12 +8,14 @@ type OnboardingActionsProps = {
   backHref?: string;
   nextHref: string;
   nextLabel?: string;
+  submit?: boolean;
 };
 
 export async function OnboardingActions({
   backHref,
   nextHref,
   nextLabel,
+  submit = false,
 }: OnboardingActionsProps) {
   const t = await getTranslations("common");
   return (
@@ -28,12 +30,19 @@ export async function OnboardingActions({
       ) : (
         <span />
       )}
-      <Button asChild size="lg">
-        <Link href={nextHref}>
+      {submit ? (
+        <Button type="submit" size="lg">
           {nextLabel ?? t("continue")}
           <ArrowRight aria-hidden="true" />
-        </Link>
-      </Button>
+        </Button>
+      ) : (
+        <Button asChild size="lg">
+          <Link href={nextHref}>
+            {nextLabel ?? t("continue")}
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      )}
     </div>
   );
 }

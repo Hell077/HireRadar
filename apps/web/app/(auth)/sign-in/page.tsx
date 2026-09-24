@@ -5,9 +5,15 @@ import { Button } from "@repo/ui/components/button";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { signIn } from "../actions";
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const t = await getTranslations("auth");
+  const { error } = await searchParams;
   return (
     <AuthShell
       title={t("signInTitle")}
@@ -24,7 +30,18 @@ export default async function SignInPage() {
         </>
       }
     >
-      <form className="space-y-5">
+      <form action={signIn} className="space-y-5">
+        {error ? (
+          <p className="rounded-lg bg-destructive-soft p-3 text-sm text-destructive">
+            {t(
+              error === "invalid"
+                ? "invalidCredentials"
+                : error === "limited"
+                  ? "rateLimited"
+                  : "serviceUnavailable",
+            )}
+          </p>
+        ) : null}
         <AuthField
           id="email"
           label={t("email")}

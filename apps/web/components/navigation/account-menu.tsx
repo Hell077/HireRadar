@@ -16,6 +16,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 
 import { useTheme, type Theme } from "@/components/theme-provider";
+import { signOut } from "@/app/profile-actions";
 
 const themeIcons = { light: Sun, dark: Moon, system: Monitor };
 
@@ -141,14 +142,16 @@ export function AccountMenu() {
                   })}
                 </div>
               </div>
-              <button
-                role="menuitem"
-                type="button"
-                className="flex w-full items-center gap-3 border-t px-3 py-3 text-sm font-semibold text-destructive"
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-                {t("signOut")}
-              </button>
+              <form action={signOut} className="border-t">
+                <button
+                  role="menuitem"
+                  type="submit"
+                  className="flex w-full items-center gap-3 px-3 py-3 text-sm font-semibold text-destructive"
+                >
+                  <LogOut className="size-4" aria-hidden="true" />
+                  {t("signOut")}
+                </button>
+              </form>
             </motion.div>
           </>
         ) : null}

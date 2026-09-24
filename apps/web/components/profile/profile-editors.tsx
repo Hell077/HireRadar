@@ -28,6 +28,9 @@ import {
   SheetTrigger,
 } from "@repo/ui/components/sheet";
 
+import { updateProfile, updateSkills } from "@/app/profile-actions";
+import type { CandidateProfile, CandidateSkill } from "@/lib/api/server";
+
 function Field({
   label,
   id,
@@ -41,7 +44,7 @@ function Field({
   );
 }
 
-export function EditProfileDialog() {
+export function EditProfileDialog({ profile }: { profile: CandidateProfile }) {
   const t = useTranslations("profileEditor");
   return (
     <Dialog>
@@ -56,67 +59,90 @@ export function EditProfileDialog() {
           <DialogTitle>{t("profileTitle")}</DialogTitle>
           <DialogDescription>{t("profileDescription")}</DialogDescription>
         </DialogHeader>
-        <form className="grid gap-5 py-2 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Field
-              id="edit-name"
-              label={t("fullName")}
-              defaultValue="Timur K."
-            />
-          </div>
+        <form action={updateProfile} className="grid gap-5 py-2 sm:grid-cols-2">
           <Field
-            id="edit-role"
-            label={t("role")}
-            defaultValue="Golang & Frontend Developer"
+            id="edit-first-name"
+            name="firstName"
+            label={t("firstName")}
+            defaultValue={profile.first_name}
+          />
+          <Field
+            id="edit-last-name"
+            name="lastName"
+            label={t("lastName")}
+            defaultValue={profile.last_name}
+          />
+          <Field
+            id="edit-seniority"
+            name="seniority"
+            label={t("seniority")}
+            defaultValue={profile.seniority}
           />
           <Field
             id="edit-experience"
+            name="experience"
             label={t("experience")}
             type="number"
-            defaultValue="5"
+            min={0}
+            max={70}
+            defaultValue={profile.experience_years}
           />
           <Field
-            id="edit-location"
-            label={t("location")}
-            defaultValue="Kazakhstan"
+            id="edit-country"
+            name="country"
+            label={t("country")}
+            defaultValue={profile.country}
+            maxLength={2}
+          />
+          <Field
+            id="edit-city"
+            name="city"
+            label={t("city")}
+            defaultValue={profile.city}
           />
           <Field
             id="edit-timezone"
+            name="timezone"
             label={t("timezone")}
-            defaultValue="UTC+5"
+            defaultValue={profile.timezone}
           />
           <Field
             id="edit-salary"
+            name="salary"
             label={t("salary")}
+            type="number"
+            min={0}
+            defaultValue={profile.desired_salary?.amount}
             placeholder={t("salaryPlaceholder")}
           />
-          <Field id="edit-currency" label={t("currency")} defaultValue="USD" />
+          <Field
+            id="edit-currency"
+            name="currency"
+            label={t("currency")}
+            defaultValue={profile.desired_salary?.currency ?? "USD"}
+            maxLength={3}
+          />
+          <DialogFooter className="sm:col-span-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                {t("cancel")}
+              </Button>
+            </DialogClose>
+            <Button type="submit">{t("save")}</Button>
+          </DialogFooter>
         </form>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">{t("cancel")}</Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button>{t("save")}</Button>
-          </DialogClose>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-const initialSkills = [
-  "Go",
-  "React",
-  "Next.js",
-  "TypeScript",
-  "PostgreSQL",
-  "Docker",
-];
-
-export function EditSkillsSheet() {
+export function EditSkillsSheet({
+  initialSkills,
+}: {
+  initialSkills: CandidateSkill[];
+}) {
   const t = useTranslations("profileEditor");
-  const [skills, setSkills] = useState(initialSkills);
+  const [skills, setSkills] = useState(initialSkills.map(({ name }) => name));
   const [skill, setSkill] = useState("");
 
   function addSkill() {
@@ -139,57 +165,58 @@ export function EditSkillsSheet() {
           <SheetTitle>{t("skillsTitle")}</SheetTitle>
           <SheetDescription>{t("skillsDescription")}</SheetDescription>
         </SheetHeader>
-        <div className="flex gap-2 py-3">
-          <Input
-            value={skill}
-            onChange={(event) => setSkill(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addSkill();
-              }
-            }}
-            placeholder={t("skillPlaceholder")}
-          />
-          <Button
-            type="button"
-            size="icon"
-            onClick={addSkill}
-            aria-label={t("addSkill")}
-          >
-            <Plus aria-hidden="true" />
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {skills.map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-medium"
-            >
-              {item}
-              <button
-                type="button"
-                onClick={() =>
-                  setSkills((values) =>
-                    values.filter((value) => value !== item),
-                  )
+        <form action={updateSkills} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex gap-2 py-3">
+            <Input
+              value={skill}
+              onChange={(event) => setSkill(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addSkill();
                 }
-                className="rounded-full text-muted-foreground hover:text-foreground"
-                aria-label={t("removeSkill", { skill: item })}
+              }}
+              placeholder={t("skillPlaceholder")}
+            />
+            <Button
+              type="button"
+              size="icon"
+              onClick={addSkill}
+              aria-label={t("addSkill")}
+            >
+              <Plus aria-hidden="true" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {skills.map((item) => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-medium"
               >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-        <SheetFooter>
-          <SheetClose asChild>
-            <Button variant="outline">{t("cancel")}</Button>
-          </SheetClose>
-          <SheetClose asChild>
-            <Button>{t("saveSkills")}</Button>
-          </SheetClose>
-        </SheetFooter>
+                <input type="hidden" name="skills" value={item} />
+                {item}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSkills((values) =>
+                      values.filter((value) => value !== item),
+                    )
+                  }
+                  className="rounded-full text-muted-foreground hover:text-foreground"
+                  aria-label={t("removeSkill", { skill: item })}
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <SheetFooter className="mt-auto">
+            <SheetClose asChild>
+              <Button variant="outline">{t("cancel")}</Button>
+            </SheetClose>
+            <Button type="submit">{t("saveSkills")}</Button>
+          </SheetFooter>
+        </form>
       </SheetContent>
     </Sheet>
   );

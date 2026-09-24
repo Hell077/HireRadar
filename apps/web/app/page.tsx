@@ -7,6 +7,7 @@ import {
   Send,
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
 
 import { Button } from "@repo/ui/components/button";
 
@@ -18,8 +19,7 @@ import {
   EditSkillsSheet,
   ReplaceResumeDialog,
 } from "@/components/profile/profile-editors";
-
-const skills = ["Go", "React", "Next.js", "TypeScript", "PostgreSQL", "Docker"];
+import { getCandidateData } from "@/lib/api/server";
 
 function SectionHeading({
   title,
@@ -36,29 +36,76 @@ function SectionHeading({
   );
 }
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const t = await getTranslations("profile");
+  const status = await searchParams;
+  const candidate = await getCandidateData();
+  if (!candidate) redirect("/sign-in");
+  const { profile, skills } = candidate;
+  const fullName =
+    [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
+    t("unnamed");
+  const initials =
+    [profile.first_name, profile.last_name]
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "?";
+  const location =
+    [profile.city, profile.country].filter(Boolean).join(", ") ||
+    t("locationMissing");
+  const completeness = Math.round(
+    ([
+      profile.first_name,
+      profile.last_name,
+      profile.country,
+      profile.city,
+      profile.timezone,
+      profile.seniority,
+      profile.desired_salary,
+      skills.length > 0,
+    ].filter(Boolean).length /
+      8) *
+      100,
+  );
   return (
     <div className="min-h-screen pb-24 md:pb-0">
       <AppHeader />
 
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 md:py-12">
+        {status.profileUpdated === "1" || status.skillsUpdated === "1" ? (
+          <p className="mb-6 rounded-lg bg-success-soft p-3 text-sm text-success">
+            {t("saved")}
+          </p>
+        ) : status.profileError === "1" || status.skillsError === "1" ? (
+          <p className="mb-6 rounded-lg bg-destructive-soft p-3 text-sm text-destructive">
+            {t("saveError")}
+          </p>
+        ) : null}
         <Reveal>
           <section className="border-border flex flex-col items-center gap-5 border-b pb-8 text-center sm:flex-row sm:text-left">
             <div className="bg-accent text-accent-foreground grid size-19 shrink-0 place-items-center rounded-3xl text-xl font-bold">
-              TK
+              {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-[27px] font-bold tracking-tight">Timur K.</h1>
+              <h1 className="text-[27px] font-bold tracking-tight">
+                {fullName}
+              </h1>
               <p className="text-muted-foreground mt-1 text-[15px] font-medium">
-                {t("role")}
+                {profile.seniority
+                  ? t("seniorityRole", { seniority: profile.seniority })
+                  : t("roleMissing")}
               </p>
               <p className="text-muted-foreground mt-2 flex items-center justify-center gap-1.5 text-xs sm:justify-start">
                 <MapPin className="size-3.5" aria-hidden="true" />
-                {t("location")}
+                {location}
               </p>
             </div>
-            <EditProfileDialog />
+            <EditProfileDialog profile={profile} />
           </section>
         </Reveal>
 
@@ -97,15 +144,15 @@ export default async function ProfilePage() {
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
               <SectionHeading
                 title={t("skills")}
-                action={<EditSkillsSheet />}
+                action={<EditSkillsSheet initialSkills={skills} />}
               />
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.map((skill) => (
                   <span
-                    key={skill}
+                    key={skill.name}
                     className="bg-secondary rounded-full px-3 py-2 text-xs font-semibold"
                   >
-                    {skill}
+                    {skill.name}
                   </span>
                 ))}
               </div>
@@ -139,10 +186,13 @@ export default async function ProfilePage() {
             <section className="border-border bg-card rounded-xl border p-5">
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>{t("completeness")}</span>
-                <span className="text-primary">82%</span>
+                <span className="text-primary">{completeness}%</span>
               </div>
               <div className="bg-secondary mt-3 h-1.5 overflow-hidden rounded-full">
-                <div className="bg-primary h-full w-[82%] rounded-full" />
+                <div
+                  className="bg-primary h-full rounded-full"
+                  style={{ width: `${completeness}%` }}
+                />
               </div>
               <p className="text-muted-foreground mt-3 text-xs leading-5">
                 {t("completenessHelp")}

@@ -6,9 +6,15 @@ import { Button } from "@repo/ui/components/button";
 
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { requestPasswordReset } from "../actions";
 
-export default async function ForgotPasswordPage() {
+export default async function ForgotPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; sent?: string }>;
+}) {
   const t = await getTranslations("auth");
+  const { error, sent } = await searchParams;
   return (
     <AuthShell
       title={t("forgotTitle")}
@@ -23,7 +29,16 @@ export default async function ForgotPasswordPage() {
         </Link>
       }
     >
-      <form className="space-y-5">
+      <form action={requestPasswordReset} className="space-y-5">
+        {sent === "1" ? (
+          <p className="rounded-lg bg-success-soft p-3 text-sm text-success">
+            {t("resetSent")}
+          </p>
+        ) : error ? (
+          <p className="rounded-lg bg-destructive-soft p-3 text-sm text-destructive">
+            {t("serviceUnavailable")}
+          </p>
+        ) : null}
         <AuthField
           id="email"
           label={t("email")}
