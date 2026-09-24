@@ -89,6 +89,15 @@ Motion should explain state changes and preserve spatial continuity. Use it for 
 
 Implementation uses shared Motion reveal and route-transition primitives rather than screen-specific timing logic. Interactive controls use short CSS transitions, while operating-system reduced-motion preferences disable movement globally.
 
+## Theme and interaction behavior
+
+- Light, dark, and system appearance options use the same semantic token names; changing theme must not require component-specific color overrides.
+- The account avatar is an interactive control. On desktop it opens an anchored menu; on mobile it opens a bottom sheet.
+- Account navigation includes profile, settings, theme, language, and sign-out actions.
+- Vacancy cards are clickable as a whole and open `/jobs/[id]`. Nested save controls remain independent actions and must stop card navigation.
+- Notification controls open an anchored panel on desktop and a focused sheet on mobile.
+- All interactive surfaces require default, hover, focus-visible, pressed, selected, and disabled states where applicable.
+
 ## Pen.dev workflow
 
 - Store design files in the repository so design changes can be reviewed alongside code.
@@ -119,4 +128,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: localized saved jobs and settings for vacancy sources, notifications, delivery rules, and Telegram.
 - Complete: localized profile, skills, salary expectations, and resume editing flows using shared dialog and sheet components.
 - Complete: reusable loading skeletons, empty and error states, retry actions, and animated success feedback.
-- Next: Telegram connection states and backend integration.
+- Complete in design: dark theme foundations, account menu, vacancy-card interaction states, and notification panels for desktop and mobile.
+- Next: implement the approved theme and interaction designs, then continue with Telegram connection states and backend integration.
