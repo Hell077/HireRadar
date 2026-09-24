@@ -1,0 +1,107 @@
+name: hireradar
+
+x-backend-env: &backend-env
+  APP_ENV: production
+  PORT: "8080"
+  DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+  PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT: http://rustfs:9000
+  S3_BUCKET: ${S3_BUCKET:-hireradar-resumes}
+  S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+  S3_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+
+services:
+  postgres:
+    image: postgres:17.11-alpine3.24
+    environment:
+      POSTGRES_DB: hireradar
+      POSTGRES_USER: hireradar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hireradar -d hireradar"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.2-alpine3.23
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.6
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  rustfs-init:
+    image: amazon/aws-cli:2.36.50
+    entrypoint: ["/bin/sh", "-ec"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      AWS_DEFAULT_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-hireradar-resumes}
+    command:
+      - |
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$S3_BUCKET" >/dev/null 2>&1 ||
+        aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$S3_BUCKET"
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    image: hireradar-backend:local
+    environment: *backend-env
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rustfs_data:
