@@ -17,6 +17,7 @@ import (
 	rediscache "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/redis"
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	authpostgres "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/postgres"
+	authredis "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/redis"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/token"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
@@ -79,6 +80,7 @@ func run() error {
 		}
 		defer client.Close()
 		cache = client
+		services.Limiter = authredis.NewLimiter(client.Redis())
 	}
 
 	checker := health.NewService(

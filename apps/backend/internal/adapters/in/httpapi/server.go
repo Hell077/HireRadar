@@ -23,6 +23,7 @@ type AuthServices struct {
 	Registrar Registrar
 	Sessions  Sessions
 	Email     EmailActions
+	Limiter   AuthLimiter
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -35,6 +36,9 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		slog.Info("http request", "method", c.Method(), "path", c.Path(), "status", c.Response().StatusCode(), "request_id", requestid.FromContext(c), "duration_ms", time.Since(started).Milliseconds())
 		return err
 	})
+	if len(auth) > 0 && auth[0].Limiter != nil {
+		app.Use("/api/v1/auth", rateLimitAuth(auth[0].Limiter))
+	}
 	api := humafiber.New(app, huma.DefaultConfig("HireRadar API", "0.1.0"))
 
 	huma.Register(api, huma.Operation{
