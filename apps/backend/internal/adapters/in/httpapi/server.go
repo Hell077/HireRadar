@@ -22,6 +22,7 @@ type healthOutput struct {
 type AuthServices struct {
 	Registrar Registrar
 	Sessions  Sessions
+	Email     EmailActions
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -66,7 +67,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		output.Body.Status = result.Status
 		return output, nil
 	})
-	services := AuthServices{Registrar: unavailableRegistrar{}, Sessions: unavailableSessions{}}
+	services := AuthServices{Registrar: unavailableRegistrar{}, Sessions: unavailableSessions{}, Email: unavailableEmail{}}
 	if len(auth) > 0 {
 		if auth[0].Registrar != nil {
 			services.Registrar = auth[0].Registrar
@@ -74,9 +75,13 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		if auth[0].Sessions != nil {
 			services.Sessions = auth[0].Sessions
 		}
+		if auth[0].Email != nil {
+			services.Email = auth[0].Email
+		}
 	}
 	registerAuth(api, services.Registrar)
 	registerSessions(api, services.Sessions)
+	registerEmail(api, services.Email)
 
 	return app
 }

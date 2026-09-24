@@ -58,6 +58,7 @@ func run() error {
 		database = client
 		store := authpostgres.NewRegistrationStore(client.Pool())
 		services.Registrar = application.NewRegisterService(store, password.Argon2id{}, time.Now)
+		services.Email = application.NewEmailService(store, password.Argon2id{}, time.Now)
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
 			if err != nil {
