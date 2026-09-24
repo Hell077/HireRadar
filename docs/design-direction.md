@@ -118,4 +118,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: localized personalized job feed and job details with match explanations.
 - Complete: localized saved jobs and settings for vacancy sources, notifications, delivery rules, and Telegram.
 - Complete: localized profile, skills, salary expectations, and resume editing flows using shared dialog and sheet components.
-- Next: reusable loading, empty, error, and success states, followed by backend integration.
+- Complete: reusable loading skeletons, empty and error states, retry actions, and animated success feedback.
+- Next: Telegram connection states and backend integration.

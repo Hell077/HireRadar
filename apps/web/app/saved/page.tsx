@@ -1,18 +1,24 @@
 import Link from "next/link";
 
-import { BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@repo/ui/components/button";
 
 import { AppHeader } from "@/components/app-header";
 import { JobCard } from "@/components/jobs/job-card";
+import { StatusState } from "@/components/feedback/status-state";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
 import { jobs } from "@/lib/jobs";
 
-export default async function SavedJobsPage() {
+export default async function SavedJobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ empty?: string }>;
+}) {
   const t = await getTranslations("saved");
-  const savedJobs = jobs.slice(0, 2);
+  const empty = (await searchParams).empty === "1";
+  const savedJobs = empty ? [] : jobs.slice(0, 2);
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -38,22 +44,34 @@ export default async function SavedJobsPage() {
         </Reveal>
 
         <div className="mt-8 space-y-4">
-          {savedJobs.map((job, index) => (
-            <Reveal key={job.id} delay={0.06 + index * 0.05}>
-              <JobCard job={job} />
-            </Reveal>
-          ))}
+          {empty ? (
+            <StatusState
+              icon={<Bookmark className="size-5" aria-hidden="true" />}
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
+              actionHref="/jobs"
+              actionLabel={t("browse")}
+            />
+          ) : (
+            savedJobs.map((job, index) => (
+              <Reveal key={job.id} delay={0.06 + index * 0.05}>
+                <JobCard job={job} />
+              </Reveal>
+            ))
+          )}
         </div>
 
-        <Reveal delay={0.16}>
-          <div className="mt-6 flex items-center gap-3 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-            <BookmarkCheck
-              className="size-5 shrink-0 text-primary"
-              aria-hidden="true"
-            />
-            {t("hint")}
-          </div>
-        </Reveal>
+        {!empty ? (
+          <Reveal delay={0.16}>
+            <div className="mt-6 flex items-center gap-3 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+              <BookmarkCheck
+                className="size-5 shrink-0 text-primary"
+                aria-hidden="true"
+              />
+              {t("hint")}
+            </div>
+          </Reveal>
+        ) : null}
       </main>
       <MobileNavigation active="saved" />
     </div>

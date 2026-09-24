@@ -1,16 +1,22 @@
-import { Search, SlidersHorizontal } from "lucide-react";
+import { BriefcaseBusiness, Search, SlidersHorizontal } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
 
 import { AppHeader } from "@/components/app-header";
 import { JobCard } from "@/components/jobs/job-card";
+import { StatusState } from "@/components/feedback/status-state";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
 import { jobs } from "@/lib/jobs";
 
-export default async function JobsPage() {
+export default async function JobsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ empty?: string }>;
+}) {
   const t = await getTranslations("jobs");
+  const empty = (await searchParams).empty === "1";
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -79,11 +85,21 @@ export default async function JobsPage() {
         </Reveal>
 
         <div className="mt-6 space-y-4">
-          {jobs.map((job, index) => (
-            <Reveal key={job.id} delay={0.08 + index * 0.05}>
-              <JobCard job={job} />
-            </Reveal>
-          ))}
+          {empty ? (
+            <StatusState
+              icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
+              title={t("emptyTitle")}
+              description={t("emptyDescription")}
+              actionHref="/settings"
+              actionLabel={t("adjustSettings")}
+            />
+          ) : (
+            jobs.map((job, index) => (
+              <Reveal key={job.id} delay={0.08 + index * 0.05}>
+                <JobCard job={job} />
+              </Reveal>
+            ))
+          )}
         </div>
       </main>
       <MobileNavigation active="jobs" />

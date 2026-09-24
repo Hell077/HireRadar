@@ -1,10 +1,4 @@
-import {
-  BellRing,
-  Database,
-  Save,
-  Send,
-  SlidersHorizontal,
-} from "lucide-react";
+import { BellRing, Database, Send, SlidersHorizontal } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -18,6 +12,7 @@ import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
 import { SettingToggle } from "@/components/settings/setting-toggle";
+import { SaveSettingsButton } from "@/components/settings/save-settings-button";
 
 const sourceKeys = [
   "greenhouse",
@@ -164,10 +159,7 @@ export default async function SettingsPage() {
           </Reveal>
 
           <div className="flex justify-end">
-            <Button size="lg">
-              <Save aria-hidden="true" />
-              {t("save")}
-            </Button>
+            <SaveSettingsButton />
           </div>
         </div>
       </main>

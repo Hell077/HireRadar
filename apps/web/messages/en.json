@@ -5,6 +5,11 @@
     "continue": "Continue",
     "edit": "Edit"
   },
+  "states": {
+    "errorTitle": "Something went wrong",
+    "errorDescription": "We couldn’t load this section. Your data is safe; try the request again.",
+    "retry": "Try again"
+  },
   "language": { "label": "Language", "en": "EN", "ru": "RU" },
   "nav": {
     "profile": "Profile",
@@ -94,14 +99,19 @@
     "whyMatch": "Why this matches",
     "matchExplanation": "Your profile covers the core stack, remote region and preferred employment type.",
     "missingSkills": "Potential gap",
-    "missingHelp": "This is not necessarily required. It is a skill mentioned in the vacancy but missing from your profile."
+    "missingHelp": "This is not necessarily required. It is a skill mentioned in the vacancy but missing from your profile.",
+    "emptyTitle": "No matching jobs yet",
+    "emptyDescription": "We checked your enabled sources but didn’t find a strong match. Try widening your regions, roles or minimum score.",
+    "adjustSettings": "Adjust search settings"
   },
   "saved": {
     "eyebrow": "Your shortlist",
     "title": "Saved jobs",
     "description": "You have {count, plural, one {# saved vacancy} other {# saved vacancies}} ready to review.",
     "browse": "Browse more jobs",
-    "hint": "Saved vacancies stay here even when new recommendations arrive."
+    "hint": "Saved vacancies stay here even when new recommendations arrive.",
+    "emptyTitle": "No saved jobs",
+    "emptyDescription": "Save interesting vacancies from your recommendations and they will appear here."
   },
   "settings": {
     "eyebrow": "Search control",
@@ -139,7 +149,8 @@
     "minimumMatch": "Minimum match score",
     "telegramConnected": "Telegram connected",
     "disconnect": "Disconnect",
-    "save": "Save settings"
+    "save": "Save settings",
+    "saved": "Settings saved"
   },
   "auth": {
     "eyebrow": "Focused remote job search",
