@@ -10,6 +10,7 @@ const port = process.env.PORT ?? "8080";
 const schemaUrl =
   process.env.API_SCHEMA_URL ?? `http://localhost:${port}/openapi.json`;
 const startsLocalBackend = process.env.API_SCHEMA_URL === undefined;
+const goBinary = process.env.GO_BINARY ?? "go";
 
 async function endpointAvailable() {
   try {
@@ -23,7 +24,7 @@ async function endpointAvailable() {
 }
 
 function startBackend() {
-  const backend = spawn("go", ["run", "./cmd"], {
+  const backend = spawn(goBinary, ["run", "./cmd"], {
     cwd: backendDir,
     env: { ...process.env, PORT: port },
     stdio: "inherit",
@@ -50,7 +51,7 @@ async function waitForBackend(backend) {
 
 async function generateTypes() {
   const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const child = spawn(command, ["--filter", "web", "gen:client"], {
+  const child = spawn(command, ["--filter", "web", "generate:api-types"], {
     cwd: root,
     env: { ...process.env, API_SCHEMA_URL: schemaUrl },
     stdio: "inherit",
