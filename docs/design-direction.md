@@ -117,4 +117,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: English and Russian localization with `next-intl`; the selected locale is stored in a first-party cookie and does not change route URLs.
 - Complete: localized personalized job feed and job details with match explanations.
 - Complete: localized saved jobs and settings for vacancy sources, notifications, delivery rules, and Telegram.
-- Next: profile editing flows and reusable loading, empty, error, and success states.
+- Complete: localized profile, skills, salary expectations, and resume editing flows using shared dialog and sheet components.
+- Next: reusable loading, empty, error, and success states, followed by backend integration.

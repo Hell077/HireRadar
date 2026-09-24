@@ -4,9 +4,7 @@ import {
   FileText,
   Link as LinkIcon,
   MapPin,
-  Pencil,
   Send,
-  Upload,
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
@@ -15,22 +13,25 @@ import { Button } from "@repo/ui/components/button";
 import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
+import {
+  EditProfileDialog,
+  EditSkillsSheet,
+  ReplaceResumeDialog,
+} from "@/components/profile/profile-editors";
 
 const skills = ["Go", "React", "Next.js", "TypeScript", "PostgreSQL", "Docker"];
 
-function SectionHeading({ title, action }: { title: string; action?: string }) {
+function SectionHeading({
+  title,
+  action,
+}: {
+  title: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-4">
       <h2 className="text-[17px] font-semibold tracking-tight">{title}</h2>
-      {action ? (
-        <button
-          type="button"
-          className="text-primary flex items-center gap-1.5 text-xs font-semibold"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-          {action}
-        </button>
-      ) : null}
+      {action ?? null}
     </div>
   );
 }
@@ -57,10 +58,7 @@ export default async function ProfilePage() {
                 {t("location")}
               </p>
             </div>
-            <Button variant="outline" size="lg">
-              <Pencil aria-hidden="true" />
-              {t("editProfile")}
-            </Button>
+            <EditProfileDialog />
           </section>
         </Reveal>
 
@@ -78,10 +76,7 @@ export default async function ProfilePage() {
                     {t("resumeHelp")}
                   </p>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Upload aria-hidden="true" />
-                  {t("replace")}
-                </Button>
+                <ReplaceResumeDialog />
               </div>
 
               <div className="bg-secondary mt-4 flex items-center gap-3 rounded-lg p-4">
@@ -100,7 +95,10 @@ export default async function ProfilePage() {
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
-              <SectionHeading title={t("skills")} action={t("editProfile")} />
+              <SectionHeading
+                title={t("skills")}
+                action={<EditSkillsSheet />}
+              />
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.map((skill) => (
                   <span
