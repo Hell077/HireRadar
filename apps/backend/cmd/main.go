@@ -17,6 +17,7 @@ import (
 	rediscache "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/redis"
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	authpostgres "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/postgres"
+	"github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/token"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
@@ -44,7 +45,7 @@ func run() error {
 	defer stop()
 
 	database := health.Pinger(unavailable{})
-	var registrar httpapi.Registrar
+	services := httpapi.AuthServices{}
 	if cfg.DatabaseURL != "" {
 		client, err := postgres.New(ctx, cfg.DatabaseURL)
 		if err != nil {
@@ -55,11 +56,19 @@ func run() error {
 			return fmt.Errorf("migrate PostgreSQL: %w", err)
 		}
 		database = client
-		registrar = application.NewRegisterService(
-			authpostgres.NewRegistrationStore(client.Pool()),
-			password.Argon2id{},
-			time.Now,
-		)
+		store := authpostgres.NewRegistrationStore(client.Pool())
+		services.Registrar = application.NewRegisterService(store, password.Argon2id{}, time.Now)
+		if cfg.JWTPrivateKey != "" {
+			signer, err := token.NewSigner(cfg.JWTPrivateKey)
+			if err != nil {
+				return fmt.Errorf("configure access tokens: %w", err)
+			}
+			sessions, err := application.NewSessionService(store, password.Argon2id{}, signer, time.Now)
+			if err != nil {
+				return fmt.Errorf("configure sessions: %w", err)
+			}
+			services.Sessions = sessions
+		}
 	}
 	cache := health.Pinger(unavailable{})
 	if cfg.RedisURL != "" {
@@ -75,7 +84,7 @@ func run() error {
 		health.Dependency{Name: "postgres", Pinger: database},
 		health.Dependency{Name: "redis", Pinger: cache},
 	)
-	app := httpapi.New(checker, registrar)
+	app := httpapi.New(checker, services)
 	listenErr := make(chan error, 1)
 	go func() { listenErr <- app.Listen(":" + cfg.Port) }()
 	slog.Info("backend listening", "port", cfg.Port, "environment", cfg.Environment)

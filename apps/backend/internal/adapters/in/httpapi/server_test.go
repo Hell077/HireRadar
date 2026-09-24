@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
@@ -22,6 +23,20 @@ type fakeRegistrar struct{ err error }
 
 func (f fakeRegistrar) Register(context.Context, string, string) (domain.UserID, error) {
 	return "test-user-id", f.err
+}
+
+type fakeSessions struct{ err error }
+
+func (f fakeSessions) Login(context.Context, string, string, string, string) (application.Tokens, error) {
+	return testTokens(), f.err
+}
+func (f fakeSessions) Refresh(context.Context, string) (application.Tokens, error) {
+	return testTokens(), f.err
+}
+func (f fakeSessions) Logout(context.Context, string) error { return f.err }
+
+func testTokens() application.Tokens {
+	return application.Tokens{AccessToken: "access", AccessExpiresAt: time.Unix(1000, 0), RefreshToken: "refresh", RefreshExpiresAt: time.Unix(2000, 0)}
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -64,7 +79,11 @@ func TestReadinessEndpointReportsDependencyFailure(t *testing.T) {
 func TestRegisterEndpoint(t *testing.T) {
 	request := func(appRegistrar ...Registrar) *http.Response {
 		t.Helper()
-		app := New(health.NewService(), appRegistrar...)
+		services := AuthServices{}
+		if len(appRegistrar) > 0 {
+			services.Registrar = appRegistrar[0]
+		}
+		app := New(health.NewService(), services)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(`{"email":"person@example.com","password":"a sufficiently long password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		response, err := app.Test(req)
@@ -96,5 +115,34 @@ func TestRegisterEndpoint(t *testing.T) {
 	defer unavailable.Body.Close()
 	if unavailable.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("unavailable status = %d, want 503", unavailable.StatusCode)
+	}
+}
+
+func TestSessionEndpoints(t *testing.T) {
+	for _, test := range []struct {
+		name, path, body string
+		service          Sessions
+		want             int
+	}{
+		{"login", "/api/v1/auth/login", `{"email":"person@example.com","password":"password"}`, fakeSessions{}, http.StatusOK},
+		{"bad login", "/api/v1/auth/login", `{"email":"person@example.com","password":"password"}`, fakeSessions{application.ErrInvalidCredentials}, http.StatusUnauthorized},
+		{"refresh", "/api/v1/auth/refresh", `{"refresh_token":"opaque"}`, fakeSessions{}, http.StatusOK},
+		{"replay", "/api/v1/auth/refresh", `{"refresh_token":"opaque"}`, fakeSessions{application.ErrInvalidRefreshToken}, http.StatusUnauthorized},
+		{"logout", "/api/v1/auth/logout", `{"refresh_token":"opaque"}`, fakeSessions{}, http.StatusNoContent},
+		{"unavailable", "/api/v1/auth/login", `{"email":"person@example.com","password":"password"}`, nil, http.StatusServiceUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			app := New(health.NewService(), AuthServices{Sessions: test.service})
+			req := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			response, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != test.want {
+				t.Fatalf("status = %d, want %d", response.StatusCode, test.want)
+			}
+		})
 	}
 }
