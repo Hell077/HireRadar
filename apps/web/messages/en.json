@@ -68,6 +68,51 @@
     "missingSkills": "Potential gap",
     "missingHelp": "This is not necessarily required. It is a skill mentioned in the vacancy but missing from your profile."
   },
+  "saved": {
+    "eyebrow": "Your shortlist",
+    "title": "Saved jobs",
+    "description": "You have {count, plural, one {# saved vacancy} other {# saved vacancies}} ready to review.",
+    "browse": "Browse more jobs",
+    "hint": "Saved vacancies stay here even when new recommendations arrive."
+  },
+  "settings": {
+    "eyebrow": "Search control",
+    "title": "Settings",
+    "description": "Choose where HireRadar searches and how often it contacts you.",
+    "sources": "Vacancy sources",
+    "sourcesHelp": "Only enabled sources are checked when new vacancies are collected.",
+    "source": {
+      "greenhouse": "Greenhouse",
+      "lever": "Lever",
+      "ashby": "Ashby",
+      "remotive": "Remotive",
+      "remoteok": "Remote OK",
+      "wellfound": "Wellfound"
+    },
+    "sourceHelp": {
+      "greenhouse": "Company career pages powered by Greenhouse.",
+      "lever": "Direct openings from Lever job boards.",
+      "ashby": "Startup and technology roles hosted on Ashby.",
+      "remotive": "Curated remote vacancies from Remotive.",
+      "remoteok": "Worldwide remote technology opportunities.",
+      "wellfound": "Startup roles from Wellfound companies."
+    },
+    "notifications": "Notifications",
+    "telegramMatches": "Telegram job matches",
+    "telegramMatchesHelp": "Send new matching vacancies directly to Telegram.",
+    "emailDigest": "Email digest",
+    "emailDigestHelp": "Receive a summary of new vacancies by email.",
+    "highMatchOnly": "High-quality matches only",
+    "highMatchOnlyHelp": "Skip notifications below your minimum match score.",
+    "delivery": "Delivery rules",
+    "frequency": "Notification frequency",
+    "instant": "As soon as a match appears",
+    "daily": "Daily digest",
+    "minimumMatch": "Minimum match score",
+    "telegramConnected": "Telegram connected",
+    "disconnect": "Disconnect",
+    "save": "Save settings"
+  },
   "auth": {
     "eyebrow": "Focused remote job search",
     "heroTitle": "Relevant vacancies, collected around your actual experience.",

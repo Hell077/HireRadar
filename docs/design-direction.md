@@ -116,4 +116,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: profile onboarding, resume upload, extracted-data review, job preferences, and Telegram connection preference.
 - Complete: English and Russian localization with `next-intl`; the selected locale is stored in a first-party cookie and does not change route URLs.
 - Complete: localized personalized job feed and job details with match explanations.
-- Next: saved jobs, source settings, and profile editing flows.
+- Complete: localized saved jobs and settings for vacancy sources, notifications, delivery rules, and Telegram.
+- Next: profile editing flows and reusable loading, empty, error, and success states.
