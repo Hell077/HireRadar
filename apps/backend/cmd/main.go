@@ -21,6 +21,8 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/token"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
+	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
+	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -60,6 +62,7 @@ func run() error {
 		store := authpostgres.NewRegistrationStore(client.Pool())
 		services.Registrar = application.NewRegisterService(store, password.Argon2id{}, time.Now)
 		services.Email = application.NewEmailService(store, password.Argon2id{}, time.Now)
+		services.Profile = profileapp.NewService(profilepostgres.NewStore(client.Pool()))
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
 			if err != nil {
@@ -70,6 +73,7 @@ func run() error {
 				return fmt.Errorf("configure sessions: %w", err)
 			}
 			services.Sessions = sessions
+			services.Verifier = signer
 		}
 	}
 	cache := health.Pinger(unavailable{})

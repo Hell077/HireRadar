@@ -24,6 +24,8 @@ type AuthServices struct {
 	Sessions  Sessions
 	Email     EmailActions
 	Limiter   AuthLimiter
+	Profile   ProfileService
+	Verifier  AccessVerifier
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -82,10 +84,13 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		if auth[0].Email != nil {
 			services.Email = auth[0].Email
 		}
+		services.Profile = auth[0].Profile
+		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
 	registerSessions(api, services.Sessions)
 	registerEmail(api, services.Email)
+	registerProfile(api, services.Profile, services.Verifier)
 
 	return app
 }

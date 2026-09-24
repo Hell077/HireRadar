@@ -23,7 +23,7 @@ type Profile struct {
 	Timezone        string      `json:"timezone"`
 	ExperienceYears int         `json:"experience_years"`
 	Seniority       string      `json:"seniority"`
-	DesiredSalary   *Money      `json:"desired_salary"`
+	DesiredSalary   *Money      `json:"desired_salary,omitempty"`
 }
 
 var seniorities = map[string]bool{
