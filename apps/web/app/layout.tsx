@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 import "./globals.css";
 
 const geistSans = localFont({
@@ -20,6 +22,8 @@ export const metadata: Metadata = {
   description: "Remote jobs matched to your experience.",
 };
 
+const themeScript = `(function(){try{var t=localStorage.getItem('hireradar-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=d?'dark':'light'}catch(e){}})()`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -32,10 +36,14 @@ export default async function RootLayout({
     <html
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <ThemeProvider>{children}</ThemeProvider>
         </NextIntlClientProvider>
       </body>
     </html>

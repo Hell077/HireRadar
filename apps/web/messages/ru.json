@@ -18,6 +18,29 @@
     "settings": "Настройки",
     "notifications": "Уведомления"
   },
+  "accountMenu": {
+    "open": "Открыть меню аккаунта",
+    "close": "Закрыть меню аккаунта",
+    "profile": "Открыть профиль",
+    "settings": "Настройки",
+    "theme": "Тема",
+    "light": "Светлая",
+    "dark": "Тёмная",
+    "system": "Системная",
+    "signOut": "Выйти"
+  },
+  "notifications": {
+    "open": "Открыть уведомления",
+    "close": "Закрыть уведомления",
+    "title": "Уведомления",
+    "markAll": "Прочитать все",
+    "matchTitle": "Совпадение 94% · Senior Go Engineer",
+    "matchDetail": "Northstar Labs · 2 минуты назад",
+    "resumeTitle": "Анализ резюме завершён",
+    "resumeDetail": "Добавлено 6 навыков · 1 час назад",
+    "telegramTitle": "Telegram подключён",
+    "telegramDetail": "Новые вакансии будут приходить сразу"
+  },
   "profile": {
     "role": "Golang и Frontend-разработчик",
     "location": "Казахстан · Рассматривает удалённую работу по всему миру",
@@ -85,6 +108,8 @@
     "contract": "Контракт",
     "match": "совпадение",
     "saveJob": "Сохранить вакансию",
+    "removeSavedJob": "Удалить из сохранённых",
+    "openJob": "Открыть вакансию: {title}",
     "backToJobs": "Назад к вакансиям",
     "via": "источник: {source}",
     "apply": "Откликнуться на сайте",

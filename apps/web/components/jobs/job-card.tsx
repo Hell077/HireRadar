@@ -1,16 +1,38 @@
-import Link from "next/link";
+"use client";
+
+import { useState } from "react";
 
 import { Bookmark, BriefcaseBusiness, Clock3, MapPin } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/components/button";
 
 import type { Job } from "@/lib/jobs";
 
-export async function JobCard({ job }: { job: Job }) {
-  const t = await getTranslations("jobs");
+export function JobCard({ job }: { job: Job }) {
+  const t = useTranslations("jobs");
+  const router = useRouter();
+  const [saved, setSaved] = useState(false);
+  const href = `/jobs/${job.id}`;
+
+  function openJob() {
+    router.push(href);
+  }
 
   return (
-    <article className="group rounded-xl border bg-card p-5 transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-6">
+    <article
+      role="link"
+      tabIndex={0}
+      aria-label={t("openJob", { title: job.title })}
+      onClick={openJob}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openJob();
+        }
+      }}
+      className={`group cursor-pointer rounded-xl border bg-card p-5 outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-ring/40 sm:p-6 ${saved ? "border-primary/50 bg-accent/25" : ""}`}
+    >
       <div className="flex items-start gap-4">
         <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-sm font-bold text-accent-foreground">
           {job.company.slice(0, 2).toUpperCase()}
@@ -18,18 +40,29 @@ export async function JobCard({ job }: { job: Job }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Link
-                href={`/jobs/${job.id}`}
-                className="text-lg font-semibold tracking-tight hover:text-primary"
-              >
+              <h2 className="text-lg font-semibold tracking-tight transition-colors group-hover:text-primary">
                 {job.title}
-              </Link>
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {job.company}
               </p>
             </div>
-            <Button variant="ghost" size="icon" aria-label={t("saveJob")}>
-              <Bookmark aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={saved ? t("removeSavedJob") : t("saveJob")}
+              aria-pressed={saved}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSaved((value) => !value);
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+              className={saved ? "bg-accent text-primary" : ""}
+            >
+              <Bookmark
+                className={saved ? "fill-current" : ""}
+                aria-hidden="true"
+              />
             </Button>
           </div>
 

@@ -129,4 +129,5 @@ Implementation uses shared Motion reveal and route-transition primitives rather 
 - Complete: localized profile, skills, salary expectations, and resume editing flows using shared dialog and sheet components.
 - Complete: reusable loading skeletons, empty and error states, retry actions, and animated success feedback.
 - Complete in design: dark theme foundations, account menu, vacancy-card interaction states, and notification panels for desktop and mobile.
-- Next: implement the approved theme and interaction designs, then continue with Telegram connection states and backend integration.
+- Complete in implementation: persistent light, dark, and system themes; responsive account and notification panels; fully clickable vacancy cards with independent save actions.
+- Next: Telegram connection states and backend integration.

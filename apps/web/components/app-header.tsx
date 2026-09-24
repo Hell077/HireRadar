@@ -1,17 +1,17 @@
+"use client";
+
 import Link from "next/link";
-import { Bell, Radar } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { Radar } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { AccountMenu } from "@/components/navigation/account-menu";
+import { NotificationsPanel } from "@/components/navigation/notifications-panel";
 
 type NavigationItem = "profile" | "jobs" | "saved" | "settings";
 
-export async function AppHeader({
-  active = "profile",
-}: {
-  active?: NavigationItem;
-}) {
-  const t = await getTranslations("nav");
+export function AppHeader({ active = "profile" }: { active?: NavigationItem }) {
+  const t = useTranslations("nav");
   const navigation = [
     { key: "profile", label: t("profile"), href: "/" },
     { key: "jobs", label: t("jobs"), href: "/jobs" },
@@ -19,7 +19,7 @@ export async function AppHeader({
     { key: "settings", label: t("settings"), href: "/settings" },
   ];
   return (
-    <header className="border-border bg-card border-b">
+    <header className="border-border bg-card relative z-30 border-b">
       <div className="mx-auto flex h-18 max-w-[1440px] items-center justify-between px-5 md:px-14">
         <Link
           href="/"
@@ -55,16 +55,8 @@ export async function AppHeader({
 
         <div className="flex items-center gap-2.5">
           <LanguageSwitcher />
-          <button
-            type="button"
-            className="bg-secondary text-foreground grid size-9.5 place-items-center rounded-full"
-            aria-label={t("notifications")}
-          >
-            <Bell className="size-4.5" aria-hidden="true" />
-          </button>
-          <div className="bg-primary text-primary-foreground grid size-9.5 place-items-center rounded-full text-xs font-bold">
-            T
-          </div>
+          <NotificationsPanel />
+          <AccountMenu />
         </div>
       </div>
     </header>

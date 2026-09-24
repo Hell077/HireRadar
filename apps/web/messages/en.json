@@ -18,6 +18,29 @@
     "settings": "Settings",
     "notifications": "Notifications"
   },
+  "accountMenu": {
+    "open": "Open account menu",
+    "close": "Close account menu",
+    "profile": "View profile",
+    "settings": "Settings",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "signOut": "Sign out"
+  },
+  "notifications": {
+    "open": "Open notifications",
+    "close": "Close notifications",
+    "title": "Notifications",
+    "markAll": "Mark all read",
+    "matchTitle": "94% match · Senior Go Engineer",
+    "matchDetail": "Northstar Labs · 2 minutes ago",
+    "resumeTitle": "Resume analysis complete",
+    "resumeDetail": "6 skills added · 1 hour ago",
+    "telegramTitle": "Telegram connected",
+    "telegramDetail": "New matches will be delivered instantly"
+  },
   "profile": {
     "role": "Golang & Frontend Developer",
     "location": "Kazakhstan · Open to worldwide remote",
@@ -85,6 +108,8 @@
     "contract": "Contract",
     "match": "match",
     "saveJob": "Save job",
+    "removeSavedJob": "Remove from saved jobs",
+    "openJob": "Open vacancy: {title}",
     "backToJobs": "Back to jobs",
     "via": "via {source}",
     "apply": "Apply on company site",
