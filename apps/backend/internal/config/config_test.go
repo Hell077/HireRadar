@@ -10,6 +10,7 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("PORT", "")
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
+	t.Setenv("JWT_PRIVATE_KEY", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -23,6 +24,7 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
+	t.Setenv("JWT_PRIVATE_KEY", "")
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load() error = %v, want missing DATABASE_URL", err)
@@ -31,6 +33,11 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	_, err = Load()
 	if err == nil || !strings.Contains(err.Error(), "REDIS_URL") {
 		t.Fatalf("Load() error = %v, want missing REDIS_URL", err)
+	}
+	t.Setenv("REDIS_URL", "redis://localhost:6379")
+	_, err = Load()
+	if err == nil || !strings.Contains(err.Error(), "JWT_PRIVATE_KEY") {
+		t.Fatalf("Load() error = %v, want missing JWT_PRIVATE_KEY", err)
 	}
 }
 

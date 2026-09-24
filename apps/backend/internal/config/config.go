@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	Environment string
-	Port        string
-	DatabaseURL string
-	RedisURL    string
+	Environment   string
+	Port          string
+	DatabaseURL   string
+	RedisURL      string
+	JWTPrivateKey string
 }
 
 // Load validates process configuration before opening external connections.
@@ -18,10 +19,11 @@ type Config struct {
 // readiness remains unavailable until both dependencies are configured.
 func Load() (Config, error) {
 	cfg := Config{
-		Environment: os.Getenv("APP_ENV"),
-		Port:        os.Getenv("PORT"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
+		Environment:   os.Getenv("APP_ENV"),
+		Port:          os.Getenv("PORT"),
+		DatabaseURL:   os.Getenv("DATABASE_URL"),
+		RedisURL:      os.Getenv("REDIS_URL"),
+		JWTPrivateKey: os.Getenv("JWT_PRIVATE_KEY"),
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
@@ -42,6 +44,9 @@ func Load() (Config, error) {
 		}
 		if cfg.RedisURL == "" {
 			return Config{}, fmt.Errorf("REDIS_URL is required in production")
+		}
+		if cfg.JWTPrivateKey == "" {
+			return Config{}, fmt.Errorf("JWT_PRIVATE_KEY is required in production")
 		}
 	}
 	return cfg, nil
