@@ -20,7 +20,7 @@ type healthOutput struct {
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
-func New(checker health.Checker) *fiber.App {
+func New(checker health.Checker, registrar ...Registrar) *fiber.App {
 	app := fiber.New(fiber.Config{AppName: "HireRadar API", ReadTimeout: 10 * time.Second})
 	app.Use(requestid.New())
 	app.Use(func(c fiber.Ctx) error {
@@ -61,6 +61,11 @@ func New(checker health.Checker) *fiber.App {
 		output.Body.Status = result.Status
 		return output, nil
 	})
+	if len(registrar) > 0 && registrar[0] != nil {
+		registerAuth(api, registrar[0])
+	} else {
+		registerAuth(api, unavailableRegistrar{})
+	}
 
 	return app
 }

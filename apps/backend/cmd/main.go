@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/in/httpapi"
+	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/password"
 	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/postgres"
 	rediscache "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/redis"
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
+	authpostgres "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/postgres"
+	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -41,6 +44,7 @@ func run() error {
 	defer stop()
 
 	database := health.Pinger(unavailable{})
+	var registrar httpapi.Registrar
 	if cfg.DatabaseURL != "" {
 		client, err := postgres.New(ctx, cfg.DatabaseURL)
 		if err != nil {
@@ -51,6 +55,11 @@ func run() error {
 			return fmt.Errorf("migrate PostgreSQL: %w", err)
 		}
 		database = client
+		registrar = application.NewRegisterService(
+			authpostgres.NewRegistrationStore(client.Pool()),
+			password.Argon2id{},
+			time.Now,
+		)
 	}
 	cache := health.Pinger(unavailable{})
 	if cfg.RedisURL != "" {
@@ -66,7 +75,7 @@ func run() error {
 		health.Dependency{Name: "postgres", Pinger: database},
 		health.Dependency{Name: "redis", Pinger: cache},
 	)
-	app := httpapi.New(checker)
+	app := httpapi.New(checker, registrar)
 	listenErr := make(chan error, 1)
 	go func() { listenErr <- app.Listen(":" + cfg.Port) }()
 	slog.Info("backend listening", "port", cfg.Port, "environment", cfg.Environment)

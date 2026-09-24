@@ -1,4 +1,21 @@
 export interface paths {
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a user */
+        post: operations["auth-register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -93,6 +110,25 @@ export interface components {
             readonly $schema?: string;
             status: string;
         };
+        RegisterInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RegisterInputBody.json
+             */
+            readonly $schema?: string;
+            email: string;
+            password: string;
+        };
+        RegisterOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RegisterOutputBody.json
+             */
+            readonly $schema?: string;
+            user_id: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -102,6 +138,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "auth-register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "health-check": {
         parameters: {
             query?: never;
