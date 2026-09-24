@@ -1,22 +1,98 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/in/httpapi"
+	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/postgres"
+	rediscache "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/redis"
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
+	"github.com/Hell077/HireRadar/apps/backend/internal/config"
+	"github.com/Hell077/HireRadar/apps/backend/migrations"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+type unavailable struct{}
 
-	app := httpapi.New(health.NewService())
-	if err := app.Listen(":" + port); err != nil {
+func (unavailable) Ping(context.Context) error { return errors.New("not configured") }
+
+func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	if err := run(); err != nil {
 		slog.Error("backend stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func run() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	database := health.Pinger(unavailable{})
+	if cfg.DatabaseURL != "" {
+		client, err := postgres.New(ctx, cfg.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("configure PostgreSQL: %w", err)
+		}
+		defer client.Close()
+		if err := migrate(ctx, cfg.DatabaseURL); err != nil {
+			return fmt.Errorf("migrate PostgreSQL: %w", err)
+		}
+		database = client
+	}
+	cache := health.Pinger(unavailable{})
+	if cfg.RedisURL != "" {
+		client, err := rediscache.New(cfg.RedisURL)
+		if err != nil {
+			return fmt.Errorf("configure Redis: %w", err)
+		}
+		defer client.Close()
+		cache = client
+	}
+
+	checker := health.NewService(
+		health.Dependency{Name: "postgres", Pinger: database},
+		health.Dependency{Name: "redis", Pinger: cache},
+	)
+	app := httpapi.New(checker)
+	listenErr := make(chan error, 1)
+	go func() { listenErr <- app.Listen(":" + cfg.Port) }()
+	slog.Info("backend listening", "port", cfg.Port, "environment", cfg.Environment)
+
+	select {
+	case err := <-listenErr:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown HTTP server: %w", err)
+		}
+		if err := <-listenErr; err != nil {
+			return err
+		}
+		slog.Info("backend stopped cleanly")
+		return nil
+	}
+}
+
+func migrate(ctx context.Context, databaseURL string) error {
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return migrations.Up(ctx, db)
 }

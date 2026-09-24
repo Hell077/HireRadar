@@ -1,13 +1,19 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 )
+
+type failingPinger struct{}
+
+func (failingPinger) Ping(context.Context) error { return errors.New("down") }
 
 func TestHealthEndpoint(t *testing.T) {
 	app := New(health.NewService())
@@ -30,5 +36,18 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if body.Status != "ok" {
 		t.Fatalf("body status = %q, want %q", body.Status, "ok")
+	}
+}
+
+func TestReadinessEndpointReportsDependencyFailure(t *testing.T) {
+	checker := health.NewService(health.Dependency{Name: "postgres", Pinger: failingPinger{}})
+	app := New(checker)
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/ready", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusServiceUnavailable)
 	}
 }
