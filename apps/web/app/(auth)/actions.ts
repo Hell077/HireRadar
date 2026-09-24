@@ -1,8 +1,75 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";
+
+export async function register(formData: FormData) {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  let status = 0;
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    status = response.status;
+  } catch {}
+  if (status !== 201) {
+    const error =
+      status === 409
+        ? "duplicate"
+        : status === 400
+          ? "validation"
+          : status === 429
+            ? "limited"
+            : "unavailable";
+    redirect(`/register?error=${error}`);
+  }
+  redirect("/register?sent=1");
+}
+
+export async function signIn(formData: FormData) {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  let status = 0;
+  let tokens: { access_token: string; refresh_token: string } | undefined;
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    status = response.status;
+    if (response.ok) tokens = await response.json();
+  } catch {}
+  if (status !== 200 || !tokens?.access_token || !tokens.refresh_token) {
+    const error =
+      status === 401 ? "invalid" : status === 429 ? "limited" : "unavailable";
+    redirect(`/sign-in?error=${error}`);
+  }
+  const jar = await cookies();
+  const secure = process.env.NODE_ENV === "production";
+  jar.set("hr_access", tokens.access_token, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 15 * 60,
+  });
+  jar.set("hr_refresh", tokens.refresh_token, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  });
+  redirect("/onboarding/profile");
+}
 
 export async function requestPasswordReset(formData: FormData) {
   const email = String(formData.get("email") ?? "");
