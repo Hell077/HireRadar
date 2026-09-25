@@ -10,28 +10,29 @@ import {
 import { AuthField } from "@/components/auth/auth-field";
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
-
-const extractedSkills = [
-  "Go",
-  "React",
-  "Next.js",
-  "TypeScript",
-  "PostgreSQL",
-  "Docker",
-];
+import { ResumeSuggestions } from "@/components/onboarding/resume-suggestions";
+import { getLatestResumeAnalysis } from "@/app/resume-actions";
 
 export default async function OnboardingReviewPage() {
   const t = await getTranslations("onboarding");
+  const result = await getLatestResumeAnalysis();
+  const analysis = result?.analysis;
   return (
     <OnboardingShell
       step={3}
       title={t("reviewTitle")}
       description={t("reviewDescription")}
     >
-      <div className="mb-5 flex items-center gap-3 rounded-xl bg-success-soft p-4 text-success">
-        <Check className="size-5 shrink-0" aria-hidden="true" />
-        <p className="text-sm font-medium">{t("processed")}</p>
-      </div>
+      {analysis ? (
+        <div className="mb-5 flex items-center gap-3 rounded-xl bg-success-soft p-4 text-success">
+          <Check className="size-5 shrink-0" aria-hidden="true" />
+          <p className="text-sm font-medium">{t("processed")}</p>
+        </div>
+      ) : (
+        <p className="mb-5 rounded-xl bg-secondary/50 p-4 text-sm text-muted-foreground">
+          {result ? t("processing") : t("noResume")}
+        </p>
+      )}
 
       <div className="space-y-5">
         <Card>
@@ -43,14 +44,16 @@ export default async function OnboardingReviewPage() {
               id="review-role"
               label={t("primaryRole")}
               name="role"
-              defaultValue="Golang & Frontend Developer"
+              defaultValue={analysis?.positions?.[0]?.title ?? ""}
+              readOnly
             />
             <AuthField
               id="review-experience"
               label={t("experience")}
               name="experience"
               type="number"
-              defaultValue="5"
+              defaultValue={analysis ? String(Math.round(analysis.total_experience_months / 12)) : ""}
+              readOnly
             />
           </CardContent>
         </Card>
@@ -60,29 +63,12 @@ export default async function OnboardingReviewPage() {
             <CardTitle>{t("skills")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {extractedSkills.map((skill) => (
-                <span
-                  key={skill}
-                  className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-medium"
-                >
-                  {skill}
-                  <button
-                    className="rounded-full text-muted-foreground hover:text-foreground"
-                    type="button"
-                    aria-label={t("removeSkill", { skill })}
-                  >
-                    <X className="size-3.5" aria-hidden="true" />
-                  </button>
-                </span>
-              ))}
-              <button
-                className="rounded-full border border-dashed px-3 py-2 text-sm font-medium text-primary hover:bg-accent"
-                type="button"
-              >
-                {t("addSkill")}
-              </button>
-            </div>
+            {result?.resume && analysis ? (
+              <ResumeSuggestions resumeID={result.resume.id} suggestions={result.suggestions} labels={{
+                accept: t("acceptSuggestion"), reject: t("rejectSuggestion"), accepted: t("suggestionAccepted"),
+                rejected: t("suggestionRejected"), failed: t("suggestionReviewError"),
+              }} />
+            ) : <p className="text-sm text-muted-foreground">{t("noSuggestions")}</p>}
           </CardContent>
         </Card>
 
@@ -91,18 +77,9 @@ export default async function OnboardingReviewPage() {
             <CardTitle>{t("recentExperience")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
-            <AuthField
-              id="company"
-              label={t("company")}
-              name="company"
-              defaultValue="Product company"
-            />
-            <AuthField
-              id="position"
-              label={t("position")}
-              name="position"
-              defaultValue="Software Engineer"
-            />
+            {analysis?.positions?.length ? analysis.positions.map((position) => (
+              <p className="rounded-lg bg-secondary/50 p-3 text-sm" key={position.title}>{position.title}</p>
+            )) : <p className="text-sm text-muted-foreground">{t("noSuggestions")}</p>}
           </CardContent>
         </Card>
       </div>

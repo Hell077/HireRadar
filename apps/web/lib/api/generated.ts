@@ -294,6 +294,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resumes/{id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get parsed resume and profile suggestions */
+        get: operations["resume-analysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resumes/{id}/complete": {
         parameters: {
             query?: never;
@@ -311,10 +328,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resumes/{id}/suggestions/{suggestionID}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a profile suggestion */
+        post: operations["resume-suggestion-accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resumes/{id}/suggestions/{suggestionID}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a profile suggestion */
+        post: operations["resume-suggestion-reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DetectedPosition: {
+            /** Format: double */
+            confidence: number;
+            title: string;
+        };
+        DetectedSkill: {
+            /** Format: double */
+            confidence: number;
+            name: string;
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -385,6 +446,14 @@ export interface components {
             /** Format: int64 */
             amount: number;
             currency: string;
+        };
+        ParsedResume: {
+            positions: components["schemas"]["DetectedPosition"][] | null;
+            resume_id: string;
+            skills: components["schemas"]["DetectedSkill"][] | null;
+            text?: string;
+            /** Format: int64 */
+            total_experience_months: number;
         };
         PositionsOutputBody: {
             /**
@@ -504,6 +573,16 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        ResumeAnalysisOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ResumeAnalysisOutputBody.json
+             */
+            readonly $schema?: string;
+            analysis: components["schemas"]["ParsedResume"];
+            suggestions: components["schemas"]["Suggestion"][] | null;
+        };
         ResumeDownloadOutputBody: {
             /**
              * Format: uri
@@ -590,6 +669,15 @@ export interface components {
              */
             readonly $schema?: string;
             sources: components["schemas"]["SourcePreference"][] | null;
+        };
+        Suggestion: {
+            /** Format: double */
+            confidence: number;
+            id: string;
+            kind: string;
+            resume_id: string;
+            status: string;
+            value: string;
         };
         TokenOutputBody: {
             /**
@@ -1364,6 +1452,39 @@ export interface operations {
             };
         };
     };
+    "resume-analysis": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeAnalysisOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "resume-complete": {
         parameters: {
             query?: never;
@@ -1385,6 +1506,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Resume"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "resume-suggestion-accept": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+                suggestionID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "resume-suggestion-reject": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+                suggestionID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
