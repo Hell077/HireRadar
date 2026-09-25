@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { FileText, ShieldCheck, Upload } from "lucide-react";
-import { Button } from "@repo/ui/components/button";
-import { Card, CardContent } from "@repo/ui/components/card";
-
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
+import { ResumeUploader } from "@/components/onboarding/resume-uploader";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 export default async function OnboardingResumePage() {
@@ -16,44 +13,21 @@ export default async function OnboardingResumePage() {
       title={t("resumeTitle")}
       description={t("resumeDescription")}
     >
-      <Card>
-        <CardContent>
-          <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-secondary/40 px-6 py-10 text-center transition-colors hover:bg-accent/50">
-            <input className="sr-only" type="file" accept=".pdf,.doc,.docx" />
-            <span className="grid size-12 place-items-center rounded-xl bg-card text-primary shadow-sm">
-              <Upload className="size-5" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-base font-semibold">
-              {t("dropResume")}
-            </span>
-            <span className="mt-2 text-sm text-muted-foreground">
-              {t("fileHelp")}
-            </span>
-            <Button className="mt-5" type="button" variant="outline">
-              <FileText aria-hidden="true" />
-              {t("chooseFile")}
-            </Button>
-          </label>
-
-          <div className="mt-5 flex items-start gap-3 rounded-lg bg-success-soft p-4 text-success">
-            <ShieldCheck
-              className="mt-0.5 size-5 shrink-0"
-              aria-hidden="true"
-            />
-            <p className="text-xs leading-5">{t("privacy")}</p>
-          </div>
-
-          <p className="mt-5 text-center text-sm text-muted-foreground">
-            {t("manual")}{" "}
-            <Link
-              className="font-medium text-primary hover:underline"
-              href="/onboarding/review"
-            >
-              {t("skip")}
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+      <ResumeUploader labels={{
+        drop: t("dropResume"),
+        help: t("fileHelp"),
+        choose: t("chooseFile"),
+        privacy: t("privacy"),
+        uploading: t("uploading"),
+        uploaded: t("uploaded"),
+        error: t("uploadError"),
+      }} />
+      <p className="mt-5 text-center text-sm text-muted-foreground">
+        {t("manual")} {" "}
+        <Link className="font-medium text-primary hover:underline" href="/onboarding/review">
+          {t("skip")}
+        </Link>
+      </p>
       <OnboardingActions
         backHref="/onboarding/profile"
         nextHref="/onboarding/review"
