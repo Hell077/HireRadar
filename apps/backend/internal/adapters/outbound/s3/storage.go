@@ -76,6 +76,26 @@ func (s *Storage) PDFSignature(ctx context.Context, key string) ([]byte, error) 
 	return bytes, nil
 }
 
+func (s *Storage) Download(ctx context.Context, key string) (application.ObjectInfo, []byte, error) {
+	result, err := s.client.GetObject(ctx, &awss3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		return application.ObjectInfo{}, nil, fmt.Errorf("download S3 object: %w", err)
+	}
+	defer result.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(result.Body, 10<<20+1))
+	if err != nil {
+		return application.ObjectInfo{}, nil, fmt.Errorf("read S3 object: %w", err)
+	}
+	if len(data) > 10<<20 {
+		return application.ObjectInfo{}, nil, fmt.Errorf("resume object exceeds processing limit")
+	}
+	info := application.ObjectInfo{Size: int64(len(data))}
+	if result.ContentType != nil {
+		info.ContentType = *result.ContentType
+	}
+	return info, data, nil
+}
+
 func (s *Storage) Delete(ctx context.Context, key string) error {
 	if _, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)}); err != nil {
 		return fmt.Errorf("delete S3 object: %w", err)

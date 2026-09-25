@@ -15,5 +15,6 @@ type ObjectStorage interface {
 	PresignDownload(context.Context, string, time.Duration) (string, error)
 	Stat(context.Context, string) (ObjectInfo, error)
 	PDFSignature(context.Context, string) ([]byte, error)
+	Download(context.Context, string) (ObjectInfo, []byte, error)
 	Delete(context.Context, string) error
 }
