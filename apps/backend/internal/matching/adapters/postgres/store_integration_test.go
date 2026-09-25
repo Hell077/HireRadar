@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM outbox_events WHERE aggregate_id=$1`, userID)
 		_, _ = pool.Exec(ctx, `DELETE FROM companies WHERE id=$1`, companyID)
 		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, userID)
 	}()
@@ -89,6 +91,39 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_job_matches WHERE user_id=$1`, userID).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("persisted match count=%d err=%v", count, err)
+	}
+	eventID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'profile.changed','user',$2,jsonb_build_object('user_id',$2::text))`, eventID, userID); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewOutboxWorker(pool, func(ctx context.Context, id user.UserID) error {
+		_, err := service.Refresh(ctx, id)
+		return err
+	})
+	found, err := worker.ProcessEvent(ctx, eventID)
+	if err != nil || !found {
+		t.Fatalf("process profile change found=%v err=%v", found, err)
+	}
+	var processed bool
+	if err := pool.QueryRow(ctx, `SELECT processed_at IS NOT NULL FROM outbox_events WHERE id=$1`, eventID).Scan(&processed); err != nil || !processed {
+		t.Fatalf("event acknowledgement processed=%v err=%v", processed, err)
+	}
+	found, err = worker.ProcessEvent(ctx, eventID)
+	if err != nil || found {
+		t.Fatalf("duplicate event processing found=%v err=%v", found, err)
+	}
+	retryEventID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'profile.changed','user',$2,jsonb_build_object('user_id',$2::text))`, retryEventID, userID); err != nil {
+		t.Fatal(err)
+	}
+	failingWorker := NewOutboxWorker(pool, func(context.Context, user.UserID) error { return errors.New("temporary matching failure") })
+	found, err = failingWorker.ProcessEvent(ctx, retryEventID)
+	if !found || err == nil {
+		t.Fatalf("failed refresh found=%v err=%v", found, err)
+	}
+	var attempts int
+	if err := pool.QueryRow(ctx, `SELECT attempts FROM outbox_events WHERE id=$1`, retryEventID).Scan(&attempts); err != nil || attempts != 1 {
+		t.Fatalf("retry attempts=%d err=%v", attempts, err)
 	}
 	if err := NewStore(pool).SaveMatches(ctx, user.UserID(userID), []engine.Result{}); err != nil {
 		t.Fatal(err)

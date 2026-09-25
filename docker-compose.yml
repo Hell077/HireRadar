@@ -150,6 +150,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  matching-worker:
+    image: hireradar-backend:local
+    entrypoint: ["/app/matching-worker"]
+    environment:
+      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

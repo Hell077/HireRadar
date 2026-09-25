@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/api ./cmd
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/email-worker ./cmd/email-worker
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/resume-worker ./cmd/resume-worker
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/source-worker ./cmd/source-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/matching-worker ./cmd/matching-worker
 
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata && \
@@ -16,6 +17,7 @@ COPY --from=build --chown=10001:10001 /out/api /app/api
 COPY --from=build --chown=10001:10001 /out/email-worker /app/email-worker
 COPY --from=build --chown=10001:10001 /out/resume-worker /app/resume-worker
 COPY --from=build --chown=10001:10001 /out/source-worker /app/source-worker
+COPY --from=build --chown=10001:10001 /out/matching-worker /app/matching-worker
 USER app
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]
