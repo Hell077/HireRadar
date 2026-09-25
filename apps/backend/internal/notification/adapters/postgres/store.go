@@ -11,6 +11,7 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/domain"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,6 +74,11 @@ func (s *Store) ConsumeLink(ctx context.Context, tokenHash []byte, account appli
 		}
 		return fmt.Errorf("save Telegram account: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload)
+		SELECT gen_random_uuid(),'match.created','match',m.job_id::text,jsonb_build_object('user_id',m.user_id::text,'job_id',m.job_id::text,'score',m.score::int)
+		FROM user_job_matches m WHERE m.user_id=$1`, userID); err != nil {
+		return fmt.Errorf("queue existing matches for Telegram: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit Telegram link confirmation: %w", err)
 	}
@@ -116,13 +122,89 @@ func (s *Store) GetPreferences(ctx context.Context, userID user.UserID) (domain.
 }
 
 func (s *Store) SavePreferences(ctx context.Context, userID user.UserID, preferences domain.NotificationPreferences) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO notification_preferences(user_id,enabled,minimum_score,immediate,digest_enabled,timezone,quiet_start,quiet_end,max_per_day)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin notification preference update: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `INSERT INTO notification_preferences(user_id,enabled,minimum_score,immediate,digest_enabled,timezone,quiet_start,quiet_end,max_per_day)
 		VALUES($1,$2,$3,$4,$5,$6,$7::time,$8::time,$9)
 		ON CONFLICT(user_id) DO UPDATE SET enabled=EXCLUDED.enabled,minimum_score=EXCLUDED.minimum_score,immediate=EXCLUDED.immediate,
 		digest_enabled=EXCLUDED.digest_enabled,timezone=EXCLUDED.timezone,quiet_start=EXCLUDED.quiet_start,quiet_end=EXCLUDED.quiet_end,max_per_day=EXCLUDED.max_per_day,updated_at=now()`,
 		string(userID), preferences.Enabled, preferences.MinimumScore, preferences.Immediate, preferences.DigestEnabled, preferences.Timezone, preferences.QuietStart, preferences.QuietEnd, preferences.MaxPerDay)
 	if err != nil {
 		return fmt.Errorf("save notification preferences: %w", err)
+	}
+	if !preferences.Enabled {
+		if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND status='pending'`, string(userID)); err != nil {
+			return fmt.Errorf("cancel disabled notifications: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE notifications SET scheduled_at=now() WHERE user_id=$1 AND status='pending'`, string(userID)); err != nil {
+			return fmt.Errorf("reschedule pending notifications: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload)
+			SELECT gen_random_uuid(),'match.created','match',m.job_id::text,jsonb_build_object('user_id',m.user_id::text,'job_id',m.job_id::text,'score',m.score::int)
+			FROM user_job_matches m JOIN jobs j ON j.id=m.job_id WHERE m.user_id=$1 AND j.status='active'`, string(userID)); err != nil {
+			return fmt.Errorf("queue current matches after preference update: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit notification preferences: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, action string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin Telegram feedback: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var userID string
+	err = tx.QueryRow(ctx, `SELECT user_id::text FROM telegram_accounts WHERE telegram_user_id=$1 FOR UPDATE`, telegramUserID).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return application.ErrFeedbackNotOwned
+	}
+	if err != nil {
+		return fmt.Errorf("verify Telegram account ownership: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2,0))`, userID, jobID); err != nil {
+		return fmt.Errorf("lock Telegram match feedback: %w", err)
+	}
+	var ownsMatch bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_matches WHERE user_id=$1 AND job_id=$2)`, userID, jobID).Scan(&ownsMatch); err != nil {
+		return fmt.Errorf("verify Telegram match ownership: %w", err)
+	}
+	if !ownsMatch {
+		return application.ErrFeedbackNotOwned
+	}
+	switch action {
+	case "save":
+		_, err = tx.Exec(ctx, `INSERT INTO saved_jobs(user_id,job_id) VALUES($1,$2) ON CONFLICT(user_id,job_id) DO NOTHING`, userID, jobID)
+	case "hide", "applied":
+		feedbackType := "hidden"
+		if action == "applied" {
+			feedbackType = "applied"
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type) VALUES($1,$2,$3,$4)
+			ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET created_at=now()`, uuid.NewString(), userID, jobID, feedbackType)
+	default:
+		return application.ErrInvalidCallback
+	}
+	if err != nil {
+		return fmt.Errorf("save Telegram feedback: %w", err)
+	}
+	if action != "save" {
+		if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, userID, jobID); err != nil {
+			return fmt.Errorf("cancel feedback notification: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, jobID); err != nil {
+			return fmt.Errorf("remove dismissed match: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Telegram feedback: %w", err)
 	}
 	return nil
 }

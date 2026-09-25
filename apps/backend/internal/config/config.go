@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -20,6 +22,7 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+	TelegramWebhookURL    string
 }
 
 // Load validates process configuration before opening external connections.
@@ -40,7 +43,9 @@ func Load() (Config, error) {
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
+		TelegramWebhookURL:    os.Getenv("TELEGRAM_WEBHOOK_URL"),
 	}
+	cfg.TelegramBotUsername = strings.TrimPrefix(cfg.TelegramBotUsername, "@")
 	telegramValues := []string{cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret}
 	configuredTelegram := 0
 	for _, value := range telegramValues {
@@ -50,6 +55,30 @@ func Load() (Config, error) {
 	}
 	if configuredTelegram != 0 && configuredTelegram != len(telegramValues) {
 		return Config{}, fmt.Errorf("TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, and TELEGRAM_WEBHOOK_SECRET must be configured together")
+	}
+	if configuredTelegram == len(telegramValues) {
+		if len(cfg.TelegramBotUsername) < 5 || len(cfg.TelegramBotUsername) > 32 || !strings.HasSuffix(strings.ToLower(cfg.TelegramBotUsername), "bot") {
+			return Config{}, fmt.Errorf("TELEGRAM_BOT_USERNAME must be a 5–32 character Telegram bot username ending in bot")
+		}
+		for _, char := range cfg.TelegramBotUsername {
+			if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_') {
+				return Config{}, fmt.Errorf("TELEGRAM_BOT_USERNAME contains an invalid character")
+			}
+		}
+		if len(cfg.TelegramWebhookSecret) < 1 || len(cfg.TelegramWebhookSecret) > 256 {
+			return Config{}, fmt.Errorf("TELEGRAM_WEBHOOK_SECRET must be between 1 and 256 characters")
+		}
+		for _, char := range cfg.TelegramWebhookSecret {
+			if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' || char == '-') {
+				return Config{}, fmt.Errorf("TELEGRAM_WEBHOOK_SECRET contains an invalid character")
+			}
+		}
+	}
+	if cfg.TelegramWebhookURL != "" {
+		parsed, err := url.ParseRequestURI(cfg.TelegramWebhookURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || configuredTelegram != len(telegramValues) {
+			return Config{}, fmt.Errorf("TELEGRAM_WEBHOOK_URL requires complete Telegram settings and an HTTPS URL")
+		}
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"

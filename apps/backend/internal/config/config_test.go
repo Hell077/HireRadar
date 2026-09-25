@@ -19,6 +19,7 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("TELEGRAM_BOT_TOKEN", "")
 	t.Setenv("TELEGRAM_BOT_USERNAME", "")
 	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
+	t.Setenv("TELEGRAM_WEBHOOK_URL", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +42,7 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	t.Setenv("TELEGRAM_BOT_TOKEN", "")
 	t.Setenv("TELEGRAM_BOT_USERNAME", "")
 	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
+	t.Setenv("TELEGRAM_WEBHOOK_URL", "")
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load() error = %v, want missing DATABASE_URL", err)
@@ -68,5 +70,28 @@ func TestLoadRejectsInvalidPort(t *testing.T) {
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "PORT") {
 		t.Fatalf("Load() error = %v, want invalid PORT", err)
+	}
+}
+
+func TestLoadValidatesTelegramSettingsTogetherAndHTTPSWebhook(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("TELEGRAM_BOT_TOKEN", "token")
+	t.Setenv("TELEGRAM_BOT_USERNAME", "@hire_radar_bot")
+	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "secret")
+	t.Setenv("TELEGRAM_WEBHOOK_URL", "http://example.test/webhooks/telegram")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("Load() error = %v, want insecure webhook rejection", err)
+	}
+	t.Setenv("TELEGRAM_WEBHOOK_URL", "https://example.test/webhooks/telegram")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TelegramBotUsername != "hire_radar_bot" {
+		t.Fatalf("bot username = %q", cfg.TelegramBotUsername)
+	}
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("partial Telegram settings were accepted")
 	}
 }

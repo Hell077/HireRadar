@@ -7,7 +7,7 @@ import (
 
 var ErrInvalidPreferences = errors.New("invalid notification preferences")
 
-type Preferences struct {
+type NotificationPreferences struct {
 	Enabled       bool    `json:"enabled"`
 	MinimumScore  int     `json:"minimum_score"`
 	Immediate     bool    `json:"immediate"`
@@ -18,12 +18,15 @@ type Preferences struct {
 	MaxPerDay     *int    `json:"max_per_day,omitempty"`
 }
 
-func DefaultPreferences() Preferences {
-	return Preferences{Enabled: true, MinimumScore: 70, Immediate: true, Timezone: "UTC"}
+func DefaultPreferences() NotificationPreferences {
+	return NotificationPreferences{Enabled: true, MinimumScore: 70, Immediate: true, Timezone: "UTC"}
 }
 
-func (p Preferences) Validate() error {
+func (p NotificationPreferences) Validate() error {
 	if p.MinimumScore < 0 || p.MinimumScore > 100 || p.Timezone == "" {
+		return ErrInvalidPreferences
+	}
+	if p.Enabled && !p.Immediate && !p.DigestEnabled {
 		return ErrInvalidPreferences
 	}
 	if _, err := time.LoadLocation(p.Timezone); err != nil {
@@ -47,7 +50,7 @@ func (p Preferences) Validate() error {
 }
 
 // ScheduleAt moves a delivery that lands in quiet hours to the next quiet-hour end.
-func (p Preferences) ScheduleAt(at time.Time) time.Time {
+func (p NotificationPreferences) ScheduleAt(at time.Time) time.Time {
 	if p.QuietStart == nil || p.QuietEnd == nil {
 		return at
 	}

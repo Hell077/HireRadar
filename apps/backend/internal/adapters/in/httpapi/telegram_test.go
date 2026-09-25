@@ -14,7 +14,7 @@ import (
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
 
-type fakeTelegramService struct{ started int }
+type fakeTelegramService struct{ started, callbacks int }
 
 func (f *fakeTelegramService) Connection(context.Context, user.UserID) (application.Account, error) {
 	return application.Account{}, nil
@@ -31,6 +31,10 @@ func (f *fakeTelegramService) SavePreferences(context.Context, user.UserID, doma
 }
 func (f *fakeTelegramService) HandleStart(context.Context, int64, int64, string, string) error {
 	f.started++
+	return nil
+}
+func (f *fakeTelegramService) HandleCallback(context.Context, int64, string, string) error {
+	f.callbacks++
 	return nil
 }
 
@@ -51,7 +55,7 @@ func TestTelegramWebhookRequiresSecretAndConsumesStart(t *testing.T) {
 	app := New(health.NewService(), AuthServices{Telegram: service, TelegramWebhookSecret: "webhook-secret"})
 	request := func(secret string) *http.Response {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/telegram", strings.NewReader(`{"message":{"text":"/start single-use","from":{"id":10,"username":"alex"},"chat":{"id":10}}}`))
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/telegram", strings.NewReader(`{"message":{"text":"/start single-use","from":{"id":10,"username":"alex"},"chat":{"id":10,"type":"private"}}}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
 		response, err := app.Test(req)
@@ -69,5 +73,16 @@ func TestTelegramWebhookRequiresSecretAndConsumesStart(t *testing.T) {
 	defer ok.Body.Close()
 	if ok.StatusCode != http.StatusOK || service.started != 1 {
 		t.Fatalf("valid secret status=%d starts=%d", ok.StatusCode, service.started)
+	}
+	callback := httptest.NewRequest(http.MethodPost, "/webhooks/telegram", strings.NewReader(`{"callback_query":{"id":"query-1","data":"job:save:b2d45992-9a64-42f3-92a8-b511562184d2","from":{"id":10}}}`))
+	callback.Header.Set("Content-Type", "application/json")
+	callback.Header.Set("X-Telegram-Bot-Api-Secret-Token", "webhook-secret")
+	callbackResponse, err := app.Test(callback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer callbackResponse.Body.Close()
+	if callbackResponse.StatusCode != http.StatusOK || service.callbacks != 1 {
+		t.Fatalf("callback status=%d callbacks=%d", callbackResponse.StatusCode, service.callbacks)
 	}
 }

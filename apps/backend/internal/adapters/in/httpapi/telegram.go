@@ -19,6 +19,7 @@ type TelegramService interface {
 	Preferences(context.Context, user.UserID) (domain.NotificationPreferences, error)
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
 	HandleStart(context.Context, int64, int64, string, string) error
+	HandleCallback(context.Context, int64, string, string) error
 }
 
 type telegramGetInput struct {
@@ -66,9 +67,17 @@ type telegramWebhookInput struct {
 				Username string `json:"username"`
 			} `json:"from"`
 			Chat struct {
-				ID int64 `json:"id"`
+				ID   int64  `json:"id"`
+				Type string `json:"type"`
 			} `json:"chat"`
 		} `json:"message,omitempty"`
+		CallbackQuery *struct {
+			ID   string `json:"id"`
+			Data string `json:"data"`
+			From struct {
+				ID int64 `json:"id"`
+			} `json:"from"`
+		} `json:"callback_query,omitempty"`
 	}
 }
 
@@ -160,13 +169,24 @@ func registerTelegram(api huma.API, service TelegramService, verifier AccessVeri
 		}
 		if input.Body.Message != nil {
 			message := input.Body.Message
-			if len(message.Text) > 7 && message.Text[:7] == "/start " {
+			if message.Chat.Type == "private" && message.From.ID == message.Chat.ID && len(message.Text) > 7 && message.Text[:7] == "/start " {
 				if err := service.HandleStart(ctx, message.From.ID, message.Chat.ID, message.From.Username, message.Text[7:]); err != nil {
 					if errors.Is(err, application.ErrLinkExpired) || errors.Is(err, application.ErrTelegramInUse) {
 						return nil, huma.Error400BadRequest("Telegram link is invalid, expired, or already connected")
 					}
 					return nil, huma.Error500InternalServerError("Telegram link could not be confirmed")
 				}
+			}
+		}
+		if input.Body.CallbackQuery != nil {
+			callback := input.Body.CallbackQuery
+			if err := service.HandleCallback(ctx, callback.From.ID, callback.ID, callback.Data); err != nil {
+				if errors.Is(err, application.ErrFeedbackNotOwned) || errors.Is(err, application.ErrInvalidCallback) {
+					out := &telegramOKOutput{}
+					out.Body.Status = "ignored"
+					return out, nil
+				}
+				return nil, huma.Error500InternalServerError("Telegram callback could not be processed")
 			}
 		}
 		out := &telegramOKOutput{}

@@ -15,6 +15,7 @@ x-backend-env: &backend-env
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
   TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
   TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+  TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
 
 services:
   postgres:
@@ -158,6 +159,18 @@ services:
     entrypoint: ["/app/matching-worker"]
     environment:
       DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notification-worker:
+    image: hireradar-backend:local
+    entrypoint: ["/app/notification-worker"]
+    profiles: ["telegram"]
+    environment:
+      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     depends_on:
       api:
         condition: service_healthy

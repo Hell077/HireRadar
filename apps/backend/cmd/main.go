@@ -26,6 +26,7 @@ import (
 	matchpostgres "github.com/Hell077/HireRadar/apps/backend/internal/matching/adapters/postgres"
 	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	notificationpostgres "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/postgres"
+	notificationtelegram "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/telegram"
 	notificationapp "github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
@@ -80,7 +81,17 @@ func run() error {
 		services.SourceCatalog = sourcepostgres.NewCatalog(client.Pool())
 		services.Jobs = jobpostgres.NewCatalog(client.Pool())
 		services.Matches = matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
-		services.Telegram = notificationapp.NewService(notificationpostgres.NewStore(client.Pool()), cfg.TelegramBotUsername, time.Now)
+		var telegramBot notificationapp.Bot
+		if cfg.TelegramBotToken != "" {
+			client := notificationtelegram.NewClient(cfg.TelegramBotToken)
+			telegramBot = client
+			if cfg.TelegramWebhookURL != "" {
+				if err := client.SetWebhook(ctx, cfg.TelegramWebhookURL, cfg.TelegramWebhookSecret); err != nil {
+					slog.Warn("configure Telegram webhook", "error", err)
+				}
+			}
+		}
+		services.Telegram = notificationapp.NewService(notificationpostgres.NewStore(client.Pool()), cfg.TelegramBotUsername, time.Now, telegramBot)
 		services.TelegramWebhookSecret = cfg.TelegramWebhookSecret
 		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
 			storage, err := s3storage.New(ctx, cfg)
