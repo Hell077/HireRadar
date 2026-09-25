@@ -14,6 +14,7 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
@@ -158,6 +159,28 @@ func TestMetricsExposeRequestCounters(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `hireradar_http_requests_total{method="GET",status="200"} 1`) {
 		t.Fatalf("status=%d metrics=%s", response.StatusCode, body)
+	}
+}
+
+func TestHTTPTraceContextIsAcceptedAndReturned(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	t.Setenv("OTEL_TRACES_EXPORTER", "none")
+	shutdown, err := observability.InitTracing(context.Background(), "httpapi-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdown(context.Background())
+	app := New(health.NewService())
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	request.Header.Set("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if got := response.Header.Get("X-Trace-ID"); got != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("X-Trace-ID=%q", got)
 	}
 }
 

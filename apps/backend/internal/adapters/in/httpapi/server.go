@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/requestid"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
+	fiberotel "github.com/gofiber/contrib/v3/otel"
 )
 
 type healthOutput struct {
@@ -58,11 +59,12 @@ type AuthServices struct {
 func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	app := fiber.New(fiber.Config{AppName: "HireRadar API", ReadTimeout: 10 * time.Second})
 	app.Use(requestid.New())
+	app.Use(fiberotel.Middleware(fiberotel.WithTraceResponseHeader("X-Trace-ID"), fiberotel.WithoutMetrics(true)))
 	app.Use(func(c fiber.Ctx) error {
 		started := time.Now()
 		err := c.Next()
 		elapsed := time.Since(started)
-		slog.Info("http request", "method", c.Method(), "path", c.Path(), "status", c.Response().StatusCode(), "request_id", requestid.FromContext(c), "duration_ms", elapsed.Milliseconds())
+		slog.Info("http request", "method", c.Method(), "path", c.Path(), "status", c.Response().StatusCode(), "request_id", requestid.FromContext(c), "trace_id", c.GetRespHeader("X-Trace-ID"), "duration_ms", elapsed.Milliseconds())
 		key := fmt.Sprintf("%s|%d", c.Method(), c.Response().StatusCode())
 		requestMetrics.Lock()
 		metric := requestMetrics.values[key]

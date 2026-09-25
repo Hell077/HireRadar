@@ -28,6 +28,7 @@ import (
 	notificationpostgres "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/postgres"
 	notificationtelegram "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/telegram"
 	notificationapp "github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
 	resumepostgres "github.com/Hell077/HireRadar/apps/backend/internal/resume/adapters/postgres"
@@ -56,6 +57,17 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	shutdownTracing, err := observability.InitTracing(ctx, "hireradar-api")
+	if err != nil {
+		return fmt.Errorf("configure distributed tracing: %w", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(shutdownCtx); err != nil {
+			slog.Warn("flush distributed traces", "error", err)
+		}
+	}()
 
 	database := health.Pinger(unavailable{})
 	services := httpapi.AuthServices{}
