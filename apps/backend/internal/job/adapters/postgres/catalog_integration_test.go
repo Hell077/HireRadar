@@ -46,7 +46,7 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	}
 	ingestor := NewIngestor()
 	for n, location := range []string{"Remote — Kazakhstan", "Remote — US only"} {
-		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Description: "Uses Go for backend engineering.", Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
+		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Description: "Uses Go for backend engineering. Salary: $120k-$160k annually.", Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
 		vocabulary, err := ingestor.LoadSkillVocabulary(ctx, tx)
 		if err != nil {
 			_ = tx.Rollback(ctx)
@@ -68,6 +68,9 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	if len(first.Items) != 1 || first.NextCursor == "" {
 		t.Fatalf("unexpected first page: %+v", first)
 	}
+	if first.Items[0].Salary == nil || first.Items[0].Salary.Minimum != 120000 || first.Items[0].Salary.Currency != "USD" {
+		t.Fatalf("salary range missing from feed: %+v", first.Items[0].Salary)
+	}
 	second, err := catalog.List(ctx, ListQuery{Limit: 1, Cursor: first.NextCursor, SourceID: sourceID})
 	if err != nil {
 		t.Fatal(err)
@@ -85,8 +88,8 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	if len(filtered.Items[0].Skills) == 0 || filtered.Items[0].Skills[0].Name != "Go" {
 		t.Fatalf("job skills were not extracted from the catalog: %+v", filtered.Items[0].Skills)
 	}
-	if got, err := catalog.Get(ctx, filtered.Items[0].ID); err != nil || len(got.Skills) == 0 {
-		t.Fatalf("get normalized job skills = %+v, %v", got, err)
+	if got, err := catalog.Get(ctx, filtered.Items[0].ID); err != nil || len(got.Skills) == 0 || got.Salary == nil || got.Salary.Maximum != 160000 {
+		t.Fatalf("get normalized job enrichment = %+v, %v", got, err)
 	}
 	if _, err := catalog.List(ctx, ListQuery{Cursor: "broken", Limit: 1}); !errors.Is(err, jobdomain.ErrInvalidCursor) {
 		t.Fatalf("invalid cursor error = %v", err)

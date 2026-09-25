@@ -68,3 +68,27 @@ func TestNormalizationPreservesDisplayDataAndCanonicalizesKeys(t *testing.T) {
 		t.Fatalf("description=%q", got)
 	}
 }
+
+func TestExtractSalaryRequiresLabeledCurrencyRange(t *testing.T) {
+	tests := []struct {
+		text     string
+		min, max float64
+		currency string
+		period   string
+	}{
+		{"Salary: $120k - $160k annually", 120000, 160000, "USD", "year"},
+		{"Compensation range: EUR 4,000 to 5,500 per month", 4000, 5500, "EUR", "month"},
+		{"Base pay £40,000-£50,000 yearly", 40000, 50000, "GBP", "year"},
+	}
+	for _, test := range tests {
+		got := ExtractSalary(test.text)
+		if got == nil || got.Minimum != test.min || got.Maximum != test.max || got.Currency != test.currency || got.Period != test.period {
+			t.Errorf("ExtractSalary(%q)=%+v", test.text, got)
+		}
+	}
+	for _, text := range []string{"Experience: 5-7 years. Salary depends on experience.", "Salary competitive", "Compensation $500-$400 per year", "Pay range 100000-150000"} {
+		if got := ExtractSalary(text); got != nil {
+			t.Errorf("ExtractSalary(%q)=%+v; want nil", text, got)
+		}
+	}
+}

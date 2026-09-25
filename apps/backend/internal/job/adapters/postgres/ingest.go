@@ -62,7 +62,7 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 	}
 	if !found {
 		jobID = uuid.NewString()
-		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15,'active',$16)`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority)
+		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,salary_min,salary_max,salary_currency,salary_period,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULLIF($17,''),$18,$19,'active',$20)`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority)
 		if err != nil {
 			return false, false, fmt.Errorf("insert normalized job: %w", err)
 		}
@@ -73,14 +73,16 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 			var before struct {
 				title, description, location, applyURL       string
 				remotePolicy, eligibility, status, seniority string
+				currency, period                             *string
+				salaryMin, salaryMax                         *float64
 				employmentTypes, countries                   []string
 				publishedAt                                  *time.Time
 			}
-			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,seniority,employment_types,location_countries,published_at FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.seniority, &before.employmentTypes, &before.countries, &before.publishedAt); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,seniority,employment_types,location_countries,published_at,salary_min,salary_max,salary_currency,salary_period FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.seniority, &before.employmentTypes, &before.countries, &before.publishedAt, &before.salaryMin, &before.salaryMax, &before.currency, &before.period); err != nil {
 				return false, false, err
 			}
-			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || before.seniority != string(job.Seniority) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt)
-			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,seniority=$5,description=$6,employment_types=$7,remote_policy=$8,location=$9,location_countries=$10,eligibility=$11,apply_url=$12,canonical_url=NULLIF($13,''),published_at=$14,fingerprint=$15,source_priority=$16,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $17 THEN now() ELSE updated_at END WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated)
+			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || before.seniority != string(job.Seniority) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt) || !sameSalary(before.salaryMin, before.salaryMax, before.currency, before.period, job.Salary)
+			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,seniority=$5,description=$6,salary_min=$7,salary_max=$8,salary_currency=$9,salary_period=$10,employment_types=$11,remote_policy=$12,location=$13,location_countries=$14,eligibility=$15,apply_url=$16,canonical_url=NULLIF($17,''),published_at=$18,fingerprint=$19,source_priority=$20,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $21 THEN now() ELSE updated_at END WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated)
 			if err != nil {
 				return false, false, fmt.Errorf("update normalized job: %w", err)
 			}
@@ -219,4 +221,28 @@ func minPriority(a, b int) int {
 		return b
 	}
 	return a
+}
+
+func salaryValue(salary *jobdomain.SalaryRange, field int) any {
+	if salary == nil {
+		return nil
+	}
+	switch field {
+	case 0:
+		return salary.Minimum
+	case 1:
+		return salary.Maximum
+	case 2:
+		return salary.Currency
+	default:
+		return salary.Period
+	}
+}
+
+func sameSalary(minimum, maximum *float64, currency, period *string, current *jobdomain.SalaryRange) bool {
+	if current == nil {
+		return minimum == nil && maximum == nil && currency == nil && period == nil
+	}
+	return minimum != nil && maximum != nil && currency != nil && period != nil &&
+		*minimum == current.Minimum && *maximum == current.Maximum && *currency == current.Currency && *period == current.Period
 }

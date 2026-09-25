@@ -60,6 +60,13 @@ type JobSkill struct {
 	Confidence float64 `json:"confidence"`
 }
 
+type SalaryRange struct {
+	Minimum  float64 `json:"minimum"`
+	Maximum  float64 `json:"maximum"`
+	Currency string  `json:"currency"`
+	Period   string  `json:"period"`
+}
+
 type Company struct {
 	ID             string       `json:"id"`
 	Name           string       `json:"name"`
@@ -80,6 +87,7 @@ type Job struct {
 	Seniority       Seniority    `json:"seniority"`
 	Description     string       `json:"description"`
 	Skills          []JobSkill   `json:"skills"`
+	Salary          *SalaryRange `json:"salary,omitempty"`
 	EmploymentTypes []string     `json:"employment_types"`
 	RemotePolicy    RemotePolicy `json:"remote_policy"`
 	Location        string       `json:"location"`

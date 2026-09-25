@@ -3,6 +3,7 @@ package normalization
 import (
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -11,9 +12,11 @@ import (
 )
 
 var (
-	tags    = regexp.MustCompile(`<[^>]*>`)
-	spaces  = regexp.MustCompile(`\s+`)
-	nonWord = regexp.MustCompile(`[^a-z0-9]+`)
+	tags        = regexp.MustCompile(`<[^>]*>`)
+	spaces      = regexp.MustCompile(`\s+`)
+	nonWord     = regexp.MustCompile(`[^a-z0-9]+`)
+	salaryLabel = regexp.MustCompile(`(?i)(salary|compensation|pay range|base pay)`)
+	salaryRange = regexp.MustCompile(`(?i)(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(?:-|–|—|to)\s*(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT)?`)
 )
 
 func CompanyKey(name string) string {
@@ -49,7 +52,71 @@ func Normalize(source sourcedomain.Source, external sourcedomain.ExternalJob) jo
 		types = append(types, value)
 	}
 	description := CleanDescription(external.Description)
-	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: ClassifySeniority(external.Title), Description: description, EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: ClassifySeniority(external.Title), Description: description, Salary: ExtractSalary(external.Description), EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+}
+
+func ExtractSalary(description string) *jobdomain.SalaryRange {
+	clean := CleanDescription(description)
+	label := salaryLabel.FindStringIndex(clean)
+	if label == nil {
+		return nil
+	}
+	end := label[1] + 180
+	if end > len(clean) {
+		end = len(clean)
+	}
+	window := clean[label[1]:end]
+	match := salaryRange.FindStringSubmatch(window)
+	if match == nil {
+		return nil
+	}
+	minimum, ok := parseSalaryAmount(match[2])
+	if !ok {
+		return nil
+	}
+	maximum, ok := parseSalaryAmount(match[3])
+	if !ok || minimum <= 0 || maximum < minimum || maximum > 100_000_000 {
+		return nil
+	}
+	currency := strings.ToUpper(match[4])
+	if currency == "" {
+		currency = strings.ToUpper(match[1])
+	}
+	switch currency {
+	case "$":
+		currency = "USD"
+	case "€":
+		currency = "EUR"
+	case "£":
+		currency = "GBP"
+	}
+	if currency == "" {
+		return nil
+	}
+	period := "unspecified"
+	periodText := strings.ToLower(window)
+	switch {
+	case containsAny(periodText, "annually", "annual", "per year", "yearly", "/year", " a year"):
+		period = "year"
+	case containsAny(periodText, "per month", "monthly", "/month"):
+		period = "month"
+	case containsAny(periodText, "per week", "weekly", "/week"):
+		period = "week"
+	case containsAny(periodText, "per hour", "hourly", "/hour"):
+		period = "hour"
+	}
+	return &jobdomain.SalaryRange{Minimum: minimum, Maximum: maximum, Currency: currency, Period: period}
+}
+
+func parseSalaryAmount(value string) (float64, bool) {
+	value = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), ",", ""))
+	multiplier := 1.0
+	if strings.HasSuffix(value, "k") {
+		multiplier = 1000
+		value = strings.TrimSpace(strings.TrimSuffix(value, "k"))
+	}
+	amount, err := strconv.ParseFloat(value, 64)
+	return amount * multiplier, err == nil
 }
 
 type SkillTerm struct{ ID, Name, Normalized string }
