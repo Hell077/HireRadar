@@ -2,7 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -18,6 +22,16 @@ type healthOutput struct {
 		Status string `json:"status"`
 	}
 }
+
+type requestMetric struct {
+	count    uint64
+	duration float64
+}
+
+var requestMetrics = struct {
+	sync.Mutex
+	values map[string]requestMetric
+}{values: make(map[string]requestMetric)}
 
 type AuthServices struct {
 	Registrar             Registrar
@@ -45,8 +59,40 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	app.Use(func(c fiber.Ctx) error {
 		started := time.Now()
 		err := c.Next()
-		slog.Info("http request", "method", c.Method(), "path", c.Path(), "status", c.Response().StatusCode(), "request_id", requestid.FromContext(c), "duration_ms", time.Since(started).Milliseconds())
+		elapsed := time.Since(started)
+		slog.Info("http request", "method", c.Method(), "path", c.Path(), "status", c.Response().StatusCode(), "request_id", requestid.FromContext(c), "duration_ms", elapsed.Milliseconds())
+		key := fmt.Sprintf("%s|%d", c.Method(), c.Response().StatusCode())
+		requestMetrics.Lock()
+		metric := requestMetrics.values[key]
+		metric.count++
+		metric.duration += elapsed.Seconds()
+		requestMetrics.values[key] = metric
+		requestMetrics.Unlock()
 		return err
+	})
+	app.Get("/metrics", func(c fiber.Ctx) error {
+		requestMetrics.Lock()
+		keys := make([]string, 0, len(requestMetrics.values))
+		for key := range requestMetrics.values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		var output strings.Builder
+		output.WriteString("# HELP hireradar_http_requests_total Total HTTP requests by method and status.\n# TYPE hireradar_http_requests_total counter\n")
+		for _, key := range keys {
+			parts := strings.Split(key, "|")
+			metric := requestMetrics.values[key]
+			fmt.Fprintf(&output, "hireradar_http_requests_total{method=%q,status=%q} %d\n", parts[0], parts[1], metric.count)
+		}
+		output.WriteString("# HELP hireradar_http_request_duration_seconds_sum Cumulative HTTP request duration in seconds.\n# TYPE hireradar_http_request_duration_seconds_sum counter\n")
+		for _, key := range keys {
+			parts := strings.Split(key, "|")
+			metric := requestMetrics.values[key]
+			fmt.Fprintf(&output, "hireradar_http_request_duration_seconds_sum{method=%q,status=%q} %g\n", parts[0], parts[1], metric.duration)
+		}
+		requestMetrics.Unlock()
+		c.Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		return c.SendString(output.String())
 	})
 	if len(auth) > 0 && auth[0].Limiter != nil {
 		app.Use("/api/v1/auth", rateLimitAuth(auth[0].Limiter))

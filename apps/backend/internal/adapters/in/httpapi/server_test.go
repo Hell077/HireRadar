@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -133,6 +134,30 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if body.Status != "ok" {
 		t.Fatalf("body status = %q, want %q", body.Status, "ok")
+	}
+}
+
+func TestMetricsExposeRequestCounters(t *testing.T) {
+	requestMetrics.Lock()
+	requestMetrics.values = make(map[string]requestMetric)
+	requestMetrics.Unlock()
+	app := New(health.NewService())
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/health", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	response, err = app.Test(httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `hireradar_http_requests_total{method="GET",status="200"} 1`) {
+		t.Fatalf("status=%d metrics=%s", response.StatusCode, body)
 	}
 }
 
