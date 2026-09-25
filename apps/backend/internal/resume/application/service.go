@@ -24,6 +24,15 @@ type Store interface {
 	List(context.Context, user.UserID) ([]domain.Resume, error)
 	MarkUploaded(context.Context, user.UserID, domain.ID) error
 	MarkDeleted(context.Context, user.UserID, domain.ID) error
+	Analysis(context.Context, user.UserID, domain.ID) (domain.ParsedResume, []domain.Suggestion, error)
+	ReviewSuggestion(context.Context, user.UserID, domain.ID, string, bool) error
+}
+
+func (s *Service) Analysis(ctx context.Context, userID user.UserID, id domain.ID) (domain.ParsedResume, []domain.Suggestion, error) {
+	return s.store.Analysis(ctx, userID, id)
+}
+func (s *Service) ReviewSuggestion(ctx context.Context, userID user.UserID, resumeID domain.ID, suggestionID string, accept bool) error {
+	return s.store.ReviewSuggestion(ctx, userID, resumeID, suggestionID, accept)
 }
 
 type Upload struct {
