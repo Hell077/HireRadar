@@ -11,6 +11,11 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("JWT_PRIVATE_KEY", "")
+	t.Setenv("S3_ENDPOINT", "")
+	t.Setenv("S3_PUBLIC_ENDPOINT", "")
+	t.Setenv("S3_BUCKET", "")
+	t.Setenv("S3_ACCESS_KEY", "")
+	t.Setenv("S3_SECRET_KEY", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +30,11 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("JWT_PRIVATE_KEY", "")
+	t.Setenv("S3_ENDPOINT", "")
+	t.Setenv("S3_PUBLIC_ENDPOINT", "")
+	t.Setenv("S3_BUCKET", "")
+	t.Setenv("S3_ACCESS_KEY", "")
+	t.Setenv("S3_SECRET_KEY", "")
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load() error = %v, want missing DATABASE_URL", err)
@@ -38,6 +48,11 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	_, err = Load()
 	if err == nil || !strings.Contains(err.Error(), "JWT_PRIVATE_KEY") {
 		t.Fatalf("Load() error = %v, want missing JWT_PRIVATE_KEY", err)
+	}
+	t.Setenv("JWT_PRIVATE_KEY", "test")
+	_, err = Load()
+	if err == nil || !strings.Contains(err.Error(), "S3_ENDPOINT") {
+		t.Fatalf("Load() error = %v, want missing S3 settings", err)
 	}
 }
 

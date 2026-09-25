@@ -7,11 +7,16 @@ import (
 )
 
 type Config struct {
-	Environment   string
-	Port          string
-	DatabaseURL   string
-	RedisURL      string
-	JWTPrivateKey string
+	Environment      string
+	Port             string
+	DatabaseURL      string
+	RedisURL         string
+	JWTPrivateKey    string
+	S3Endpoint       string
+	S3PublicEndpoint string
+	S3Bucket         string
+	S3AccessKey      string
+	S3SecretKey      string
 }
 
 // Load validates process configuration before opening external connections.
@@ -19,11 +24,16 @@ type Config struct {
 // readiness remains unavailable until both dependencies are configured.
 func Load() (Config, error) {
 	cfg := Config{
-		Environment:   os.Getenv("APP_ENV"),
-		Port:          os.Getenv("PORT"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		RedisURL:      os.Getenv("REDIS_URL"),
-		JWTPrivateKey: os.Getenv("JWT_PRIVATE_KEY"),
+		Environment:      os.Getenv("APP_ENV"),
+		Port:             os.Getenv("PORT"),
+		DatabaseURL:      os.Getenv("DATABASE_URL"),
+		RedisURL:         os.Getenv("REDIS_URL"),
+		JWTPrivateKey:    os.Getenv("JWT_PRIVATE_KEY"),
+		S3Endpoint:       os.Getenv("S3_ENDPOINT"),
+		S3PublicEndpoint: os.Getenv("S3_PUBLIC_ENDPOINT"),
+		S3Bucket:         os.Getenv("S3_BUCKET"),
+		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
@@ -47,6 +57,9 @@ func Load() (Config, error) {
 		}
 		if cfg.JWTPrivateKey == "" {
 			return Config{}, fmt.Errorf("JWT_PRIVATE_KEY is required in production")
+		}
+		if cfg.S3Endpoint == "" || cfg.S3PublicEndpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" {
+			return Config{}, fmt.Errorf("S3_ENDPOINT, S3_PUBLIC_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, and S3_SECRET_KEY are required in production")
 		}
 	}
 	return cfg, nil
