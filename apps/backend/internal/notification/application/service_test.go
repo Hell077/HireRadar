@@ -32,6 +32,10 @@ func (*serviceStore) GetPreferences(context.Context, user.UserID) (domain.Notifi
 func (*serviceStore) SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error {
 	return nil
 }
+func (*serviceStore) ListSavedJobs(context.Context, user.UserID, int) ([]SavedJob, error) {
+	return nil, nil
+}
+func (*serviceStore) RemoveSavedJob(context.Context, user.UserID, string) error { return nil }
 func (s *serviceStore) ApplyAction(_ context.Context, _ int64, jobID, action string) error {
 	s.jobID, s.action = jobID, action
 	return s.applyErr

@@ -29,6 +29,10 @@ func (f *fakeTelegramService) Preferences(context.Context, user.UserID) (domain.
 func (f *fakeTelegramService) SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error {
 	return nil
 }
+func (f *fakeTelegramService) SavedJobs(context.Context, user.UserID, int) ([]application.SavedJob, error) {
+	return nil, nil
+}
+func (f *fakeTelegramService) RemoveSavedJob(context.Context, user.UserID, string) error { return nil }
 func (f *fakeTelegramService) HandleStart(context.Context, int64, int64, string, string) error {
 	f.started++
 	return nil
@@ -41,6 +45,18 @@ func (f *fakeTelegramService) HandleCallback(context.Context, int64, string, str
 func TestTelegramLinkRequiresAuthentication(t *testing.T) {
 	app := New(health.NewService(), AuthServices{Telegram: &fakeTelegramService{}, Verifier: fakeVerifier{}})
 	response, err := app.Test(httptest.NewRequest(http.MethodPost, "/api/v1/telegram/link", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", response.StatusCode)
+	}
+}
+
+func TestSavedJobsRequireAuthentication(t *testing.T) {
+	app := New(health.NewService(), AuthServices{Telegram: &fakeTelegramService{}, Verifier: fakeVerifier{}})
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/saved-jobs", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

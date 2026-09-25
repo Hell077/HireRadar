@@ -155,6 +155,36 @@ func (s *Store) SavePreferences(ctx context.Context, userID user.UserID, prefere
 	return nil
 }
 
+func (s *Store) ListSavedJobs(ctx context.Context, userID user.UserID, limit int) ([]application.SavedJob, error) {
+	rows, err := s.pool.Query(ctx, `SELECT j.id::text,j.title,c.name,j.location,j.apply_url,j.status,s.created_at
+		FROM saved_jobs s JOIN jobs j ON j.id=s.job_id JOIN companies c ON c.id=j.company_id
+		WHERE s.user_id=$1 ORDER BY s.created_at DESC,j.id LIMIT $2`, string(userID), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list saved jobs: %w", err)
+	}
+	defer rows.Close()
+	items := make([]application.SavedJob, 0)
+	for rows.Next() {
+		var item application.SavedJob
+		if err := rows.Scan(&item.JobID, &item.Title, &item.Company, &item.Location, &item.ApplyURL, &item.Status, &item.SavedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read saved jobs: %w", err)
+	}
+	return items, nil
+}
+
+func (s *Store) RemoveSavedJob(ctx context.Context, userID user.UserID, jobID string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM saved_jobs WHERE user_id=$1 AND job_id=$2`, string(userID), jobID)
+	if err != nil {
+		return fmt.Errorf("remove saved job: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, action string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

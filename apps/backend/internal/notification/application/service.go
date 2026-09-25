@@ -31,6 +31,16 @@ type Account struct {
 	ConnectedAt    time.Time
 }
 
+type SavedJob struct {
+	JobID    string    `json:"job_id"`
+	Title    string    `json:"title"`
+	Company  string    `json:"company"`
+	Location string    `json:"location"`
+	ApplyURL string    `json:"apply_url"`
+	Status   string    `json:"status"`
+	SavedAt  time.Time `json:"saved_at"`
+}
+
 type Link struct {
 	Token     string
 	ExpiresAt time.Time
@@ -44,6 +54,8 @@ type Store interface {
 	Disconnect(context.Context, user.UserID) error
 	GetPreferences(context.Context, user.UserID) (domain.NotificationPreferences, error)
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
+	ListSavedJobs(context.Context, user.UserID, int) ([]SavedJob, error)
+	RemoveSavedJob(context.Context, user.UserID, string) error
 	ApplyAction(context.Context, int64, string, string) error
 }
 
@@ -154,6 +166,23 @@ func (s *Service) SavePreferences(ctx context.Context, userID user.UserID, prefe
 		return err
 	}
 	return s.store.SavePreferences(ctx, userID, preferences)
+}
+
+func (s *Service) SavedJobs(ctx context.Context, userID user.UserID, limit int) ([]SavedJob, error) {
+	if limit == 0 {
+		limit = 50
+	}
+	if limit < 1 || limit > 100 {
+		return nil, errors.New("saved job limit must be between 1 and 100")
+	}
+	return s.store.ListSavedJobs(ctx, userID, limit)
+}
+
+func (s *Service) RemoveSavedJob(ctx context.Context, userID user.UserID, jobID string) error {
+	if uuid.Validate(jobID) != nil {
+		return errors.New("invalid job ID")
+	}
+	return s.store.RemoveSavedJob(ctx, userID, jobID)
 }
 
 func (s *Service) Disconnect(ctx context.Context, userID user.UserID) error {

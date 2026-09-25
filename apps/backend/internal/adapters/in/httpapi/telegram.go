@@ -18,6 +18,8 @@ type TelegramService interface {
 	Disconnect(context.Context, user.UserID) error
 	Preferences(context.Context, user.UserID) (domain.NotificationPreferences, error)
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
+	SavedJobs(context.Context, user.UserID, int) ([]application.SavedJob, error)
+	RemoveSavedJob(context.Context, user.UserID, string) error
 	HandleStart(context.Context, int64, int64, string, string) error
 	HandleCallback(context.Context, int64, string, string) error
 }
@@ -56,6 +58,19 @@ type telegramOKOutput struct {
 		Status string `json:"status"`
 	}
 }
+type savedJobsInput struct {
+	Authorization string `header:"Authorization" required:"false"`
+	Limit         int    `query:"limit" default:"50" minimum:"1" maximum:"100"`
+}
+type savedJobDeleteInput struct {
+	Authorization string `header:"Authorization" required:"false"`
+	ID            string `path:"id"`
+}
+type savedJobsOutput struct {
+	Body struct {
+		Items []application.SavedJob `json:"items"`
+	}
+}
 
 type telegramWebhookInput struct {
 	Secret string `header:"X-Telegram-Bot-Api-Secret-Token" required:"true"`
@@ -82,6 +97,37 @@ type telegramWebhookInput struct {
 }
 
 func registerTelegram(api huma.API, service TelegramService, verifier AccessVerifier, webhookSecret string) {
+	huma.Register(api, huma.Operation{OperationID: "saved-jobs-list", Method: "GET", Path: "/api/v1/saved-jobs", Summary: "List saved jobs"}, func(ctx context.Context, input *savedJobsInput) (*savedJobsOutput, error) {
+		if service == nil {
+			return nil, huma.Error503ServiceUnavailable("saved jobs unavailable")
+		}
+		id, err := profileUser(input.Authorization, verifier)
+		if err != nil {
+			return nil, err
+		}
+		items, err := service.SavedJobs(ctx, id, input.Limit)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("saved jobs lookup failed")
+		}
+		out := &savedJobsOutput{}
+		out.Body.Items = items
+		return out, nil
+	})
+	huma.Register(api, huma.Operation{OperationID: "saved-jobs-delete", Method: "DELETE", Path: "/api/v1/saved-jobs/{id}", Summary: "Remove a saved job"}, func(ctx context.Context, input *savedJobDeleteInput) (*telegramOKOutput, error) {
+		if service == nil {
+			return nil, huma.Error503ServiceUnavailable("saved jobs unavailable")
+		}
+		id, err := profileUser(input.Authorization, verifier)
+		if err != nil {
+			return nil, err
+		}
+		if err := service.RemoveSavedJob(ctx, id, input.ID); err != nil {
+			return nil, huma.Error400BadRequest("invalid saved job ID")
+		}
+		out := &telegramOKOutput{}
+		out.Body.Status = "removed"
+		return out, nil
+	})
 	huma.Register(api, huma.Operation{OperationID: "telegram-status", Method: "GET", Path: "/api/v1/telegram", Summary: "Get Telegram connection status"}, func(ctx context.Context, input *telegramGetInput) (*telegramOutput, error) {
 		if service == nil {
 			return nil, huma.Error503ServiceUnavailable("Telegram unavailable")
