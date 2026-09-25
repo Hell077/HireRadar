@@ -75,6 +75,7 @@ services:
       - |
         aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$S3_BUCKET" >/dev/null 2>&1 ||
         aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$S3_BUCKET"
+        aws --endpoint-url http://rustfs:9000 s3api put-bucket-cors --bucket "$$S3_BUCKET" --cors-configuration '{"CORSRules":[{"AllowedOrigins":["http://localhost:3000","http://127.0.0.1:3000"],"AllowedMethods":["PUT","GET","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3000}]}'
     depends_on:
       rustfs:
         condition: service_healthy
