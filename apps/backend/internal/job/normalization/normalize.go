@@ -3,6 +3,7 @@ package normalization
 import (
 	"html"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -12,11 +13,12 @@ import (
 )
 
 var (
-	tags        = regexp.MustCompile(`<[^>]*>`)
-	spaces      = regexp.MustCompile(`\s+`)
-	nonWord     = regexp.MustCompile(`[^a-z0-9]+`)
-	salaryLabel = regexp.MustCompile(`(?i)(salary|compensation|pay range|base pay)`)
-	salaryRange = regexp.MustCompile(`(?i)(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(?:-|–|—|to)\s*(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT)?`)
+	tags                 = regexp.MustCompile(`<[^>]*>`)
+	spaces               = regexp.MustCompile(`\s+`)
+	nonWord              = regexp.MustCompile(`[^a-z0-9]+`)
+	salaryLabel          = regexp.MustCompile(`(?i)(salary|compensation|pay range|base pay)`)
+	salaryRange          = regexp.MustCompile(`(?i)(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(?:-|–|—|to)\s*(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT|[$€£])?\s*([0-9][0-9,]*(?:\.[0-9]+)?\s*[kK]?)\s*(USD|EUR|GBP|CAD|AUD|NZD|SGD|INR|KZT)?`)
+	uppercaseCountryCode = regexp.MustCompile(`(?:^|[^A-Za-z])([A-Z]{2})(?:$|[^A-Za-z])`)
 )
 
 func CompanyKey(name string) string {
@@ -199,14 +201,14 @@ func ClassifyLocation(raw string) (jobdomain.RemotePolicy, jobdomain.Eligibility
 	kz := containsAny(value, "kazakhstan", "kazakh", "(kz)", "kz only", "kz-based")
 	world := containsAny(value, "worldwide", "global", "anywhere", "work from anywhere", "fully distributed")
 	remote := strings.Contains(value, "remote")
-	countries := explicitCountries(value)
+	countries := explicitCountries(raw)
 	policy := jobdomain.Onsite
 	switch {
 	case world:
 		policy = jobdomain.RemoteWorldwide
 	case strings.Contains(value, "hybrid"):
 		policy = jobdomain.Hybrid
-	case strings.Contains(value, "emea") || strings.Contains(value, "latam") || strings.Contains(value, "europe"):
+	case len(countries) == 0 && (containsTerm(value, "emea") || containsTerm(value, "latam") || containsTerm(value, "latin america") || containsTerm(value, "europe") || containsTerm(value, "asia pacific") || containsTerm(value, "apac") || containsTerm(value, "mena") || containsTerm(value, "americas") || containsTerm(value, "africa")):
 		policy = jobdomain.RemoteRegion
 	case remote:
 		policy = jobdomain.Remote
@@ -214,7 +216,7 @@ func ClassifyLocation(raw string) (jobdomain.RemotePolicy, jobdomain.Eligibility
 	if containsAny(value, "except kazakhstan", "excluding kazakhstan", "excluding kz", "not in kazakhstan", "not eligible in kazakhstan") {
 		return policy, jobdomain.NotEligible, countries
 	}
-	if kz {
+	if kz || hasCountry(countries, "KZ") {
 		return policy, jobdomain.Eligible, []string{"KZ"}
 	}
 	if world {
@@ -223,7 +225,7 @@ func ClassifyLocation(raw string) (jobdomain.RemotePolicy, jobdomain.Eligibility
 	if containsAny(value, "us only", "usa only", "united states only", "canada only", "eu only", "europe only", "uk only", "india only", "must be located in the us", "authorized to work in the united states", "us-based only") {
 		return policy, jobdomain.NotEligible, countries
 	}
-	if containsAny(value, "new york", "california", "united states", "u.s.", "usa", "canada", "united kingdom", "london", "germany", "france", "india") {
+	if len(countries) > 0 {
 		return policy, jobdomain.NotEligible, countries
 	}
 	// A bare remote label and broad regions such as EMEA do not establish
@@ -231,10 +233,11 @@ func ClassifyLocation(raw string) (jobdomain.RemotePolicy, jobdomain.Eligibility
 	return policy, jobdomain.EligibilityUnknown, []string{}
 }
 
-func explicitCountries(value string) []string {
+func explicitCountries(raw string) []string {
+	value := strings.ToLower(raw)
 	codes := []string{}
 	add := func(needle, code string) {
-		if strings.Contains(value, needle) {
+		if containsTerm(value, needle) {
 			for _, old := range codes {
 				if old == code {
 					return
@@ -243,22 +246,50 @@ func explicitCountries(value string) []string {
 			codes = append(codes, code)
 		}
 	}
-	add("kazakhstan", "KZ")
-	add("kazakh", "KZ")
-	add("(kz)", "KZ")
-	add("united states", "US")
-	add("u.s.", "US")
-	add("usa", "US")
-	add("us only", "US")
-	add("new york", "US")
-	add("california", "US")
-	add("canada", "CA")
-	add("united kingdom", "GB")
-	add("london", "GB")
-	add("india", "IN")
-	add("germany", "DE")
-	add("france", "FR")
+	locations := map[string][]string{
+		"KZ": {"kazakhstan", "kazakh"}, "US": {"united states", "u.s.", "usa", "us only", "new york", "california", "san francisco", "seattle", "austin"},
+		"CA": {"canada", "toronto", "vancouver", "montreal"}, "GB": {"united kingdom", "uk", "england", "scotland", "wales", "london"},
+		"IE": {"ireland", "dublin"}, "DE": {"germany", "berlin", "munich"}, "FR": {"france", "paris"}, "NL": {"netherlands", "amsterdam"},
+		"ES": {"spain", "madrid", "barcelona"}, "PT": {"portugal", "lisbon"}, "IT": {"italy", "rome", "milan"}, "CH": {"switzerland", "zurich", "geneva"},
+		"AT": {"austria", "vienna"}, "BE": {"belgium", "brussels"}, "SE": {"sweden", "stockholm"}, "NO": {"norway", "oslo"},
+		"DK": {"denmark", "copenhagen"}, "FI": {"finland", "helsinki"}, "PL": {"poland", "warsaw", "krakow"},
+		"CZ": {"czechia", "czech republic", "prague"}, "RO": {"romania", "bucharest"}, "GR": {"greece", "athens"}, "UA": {"ukraine", "kyiv"},
+		"TR": {"turkey", "türkiye", "istanbul"}, "IL": {"israel", "tel aviv"}, "AE": {"united arab emirates", "uae", "dubai", "abu dhabi"},
+		"SA": {"saudi arabia", "riyadh"}, "EG": {"egypt", "cairo"}, "ZA": {"south africa", "johannesburg", "cape town"},
+		"NG": {"nigeria", "lagos"}, "KE": {"kenya", "nairobi"}, "IN": {"india", "bengaluru", "bangalore", "mumbai", "delhi", "hyderabad"},
+		"PK": {"pakistan", "karachi", "lahore"}, "BD": {"bangladesh", "dhaka"}, "SG": {"singapore"}, "MY": {"malaysia", "kuala lumpur"},
+		"ID": {"indonesia", "jakarta", "bali"}, "PH": {"philippines", "manila"}, "TH": {"thailand", "bangkok"},
+		"VN": {"vietnam", "ho chi minh city", "hanoi"}, "JP": {"japan", "tokyo", "osaka"}, "KR": {"south korea", "seoul"},
+		"CN": {"china", "beijing", "shanghai"}, "TW": {"taiwan", "taipei"}, "AU": {"australia", "sydney", "melbourne", "brisbane", "perth"},
+		"NZ": {"new zealand", "auckland", "wellington"}, "BR": {"brazil", "sao paulo", "rio de janeiro"},
+		"MX": {"mexico", "mexico city"}, "AR": {"argentina", "buenos aires"}, "CL": {"chile", "santiago"},
+		"CO": {"colombia", "bogota", "medellin"}, "PE": {"peru", "lima"}, "CR": {"costa rica"},
+		"RU": {"russia", "russian federation", "moscow"}, "GE": {"georgia", "tbilisi"}, "AM": {"armenia", "yerevan"},
+		"AZ": {"azerbaijan", "baku"}, "UZ": {"uzbekistan", "tashkent"}, "KG": {"kyrgyzstan", "bishkek"},
+		"TJ": {"tajikistan", "dushanbe"}, "TM": {"turkmenistan", "ashgabat"},
+	}
+	for code, names := range locations {
+		for _, name := range names {
+			add(name, code)
+		}
+	}
+	validCodes := map[string]bool{"AD": true, "AE": true, "AF": true, "AL": true, "AM": true, "AO": true, "AR": true, "AT": true, "AU": true, "AZ": true, "BA": true, "BD": true, "BE": true, "BG": true, "BH": true, "BI": true, "BJ": true, "BN": true, "BO": true, "BR": true, "BT": true, "BW": true, "BY": true, "BZ": true, "CA": true, "CD": true, "CF": true, "CG": true, "CH": true, "CI": true, "CL": true, "CM": true, "CN": true, "CO": true, "CR": true, "CU": true, "CY": true, "CZ": true, "DE": true, "DJ": true, "DK": true, "DO": true, "DZ": true, "EC": true, "EE": true, "EG": true, "ES": true, "ET": true, "FI": true, "FJ": true, "FR": true, "GA": true, "GB": true, "GE": true, "GH": true, "GM": true, "GN": true, "GR": true, "GT": true, "GW": true, "GY": true, "HK": true, "HN": true, "HR": true, "HT": true, "HU": true, "ID": true, "IE": true, "IL": true, "IN": true, "IQ": true, "IR": true, "IS": true, "IT": true, "JM": true, "JO": true, "JP": true, "KE": true, "KG": true, "KH": true, "KR": true, "KW": true, "KZ": true, "LA": true, "LB": true, "LK": true, "LR": true, "LT": true, "LU": true, "LV": true, "LY": true, "MA": true, "MD": true, "ME": true, "MG": true, "MK": true, "ML": true, "MM": true, "MN": true, "MT": true, "MU": true, "MV": true, "MW": true, "MX": true, "MY": true, "MZ": true, "NA": true, "NE": true, "NG": true, "NI": true, "NL": true, "NO": true, "NP": true, "NZ": true, "OM": true, "PA": true, "PE": true, "PH": true, "PK": true, "PL": true, "PT": true, "PY": true, "QA": true, "RO": true, "RS": true, "RU": true, "RW": true, "SA": true, "SD": true, "SE": true, "SG": true, "SI": true, "SK": true, "SL": true, "SN": true, "SO": true, "SR": true, "SV": true, "SY": true, "TH": true, "TJ": true, "TM": true, "TN": true, "TR": true, "TW": true, "TZ": true, "UA": true, "UG": true, "US": true, "UY": true, "UZ": true, "VE": true, "VN": true, "YE": true, "ZA": true, "ZM": true, "ZW": true}
+	for _, match := range uppercaseCountryCode.FindAllStringSubmatch(raw, -1) {
+		if validCodes[match[1]] {
+			add(strings.ToLower(match[1]), match[1])
+		}
+	}
+	sort.Strings(codes)
 	return codes
+}
+
+func hasCountry(codes []string, target string) bool {
+	for _, code := range codes {
+		if code == target {
+			return true
+		}
+	}
+	return false
 }
 
 func containsAny(value string, needles ...string) bool {

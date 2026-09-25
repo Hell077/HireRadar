@@ -37,6 +37,33 @@ func TestClassifyLocationRetainsExplicitCountryCodes(t *testing.T) {
 	}
 }
 
+func TestClassifyLocationRecognizesCommonWorldLocationsSafely(t *testing.T) {
+	tests := []struct {
+		location string
+		policy   jobdomain.RemotePolicy
+		elig     jobdomain.Eligibility
+		country  string
+	}{
+		{"Remote — Brazil", jobdomain.Remote, jobdomain.NotEligible, "BR"},
+		{"Remote, IN", jobdomain.Remote, jobdomain.NotEligible, "IN"},
+		{"Remote in Bengaluru", jobdomain.Remote, jobdomain.NotEligible, "IN"},
+		{"Remote — South Africa", jobdomain.Remote, jobdomain.NotEligible, "ZA"},
+		{"Remote — KZ", jobdomain.Remote, jobdomain.Eligible, "KZ"},
+		{"Remote in", jobdomain.Remote, jobdomain.EligibilityUnknown, ""},
+		{"Remote, APAC", jobdomain.RemoteRegion, jobdomain.EligibilityUnknown, ""},
+	}
+	for _, test := range tests {
+		policy, eligibility, countries := ClassifyLocation(test.location)
+		gotCountry := ""
+		if len(countries) > 0 {
+			gotCountry = countries[0]
+		}
+		if policy != test.policy || eligibility != test.elig || gotCountry != test.country {
+			t.Errorf("ClassifyLocation(%q)=(%s,%s,%v)", test.location, policy, eligibility, countries)
+		}
+	}
+}
+
 func TestClassifySeniorityAndExtractSkills(t *testing.T) {
 	for title, want := range map[string]jobdomain.Seniority{"Senior Go Engineer": jobdomain.Senior, "Jr Backend Developer": jobdomain.Junior, "Principal Engineer": jobdomain.Principal, "Engineering Manager": jobdomain.Manager, "Product Designer": jobdomain.SeniorityUnknown} {
 		if got := ClassifySeniority(title); got != want {
