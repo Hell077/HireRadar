@@ -33,6 +33,8 @@ func (r *Registry) Fetch(ctx context.Context, source domain.Source) (domain.Fetc
 		return r.fetchLever(ctx, source)
 	case domain.Ashby:
 		return r.fetchAshby(ctx, source)
+	case domain.GitHub:
+		return r.fetchGitHub(ctx, source)
 	default:
 		return domain.FetchResult{}, fmt.Errorf("unsupported source type %q", source.Type)
 	}
@@ -41,6 +43,13 @@ func (r *Registry) Fetch(ctx context.Context, source domain.Source) (domain.Fetc
 type config struct {
 	Board string `json:"board"`
 	Limit int    `json:"page_size"`
+}
+
+type githubConfig struct {
+	Owner  string   `json:"owner"`
+	Repo   string   `json:"repo"`
+	Labels []string `json:"labels"`
+	Limit  int      `json:"page_size"`
 }
 
 func readConfig(source domain.Source) (config, error) {
@@ -217,6 +226,90 @@ func (r *Registry) fetchAshby(ctx context.Context, source domain.Source) (domain
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Title, Description: item.Description, Location: item.Location, EmploymentType: item.EmploymentType, ApplyURL: item.URL, PublishedAt: parseTime(item.Published), Raw: raw})
 	}
 	return result, nil
+}
+
+type githubIssue struct {
+	Number      int64           `json:"number"`
+	Title       string          `json:"title"`
+	Body        string          `json:"body"`
+	URL         string          `json:"html_url"`
+	Created     string          `json:"created_at"`
+	PullRequest json.RawMessage `json:"pull_request"`
+}
+
+func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domain.FetchResult, error) {
+	var cfg githubConfig
+	if err := json.Unmarshal(source.Config, &cfg); err != nil {
+		return domain.FetchResult{}, fmt.Errorf("decode GitHub source config: %w", err)
+	}
+	cfg.Owner = strings.TrimSpace(cfg.Owner)
+	cfg.Repo = strings.TrimSpace(cfg.Repo)
+	if cfg.Owner == "" || cfg.Repo == "" || strings.ContainsAny(cfg.Owner, "/\\") || strings.ContainsAny(cfg.Repo, "/\\") || cfg.Owner == "." || cfg.Owner == ".." || cfg.Repo == "." || cfg.Repo == ".." {
+		return domain.FetchResult{}, domain.ErrInvalidSource
+	}
+	if cfg.Limit < 1 || cfg.Limit > 100 {
+		cfg.Limit = 100
+	}
+	const maxPages = 100
+	result := domain.FetchResult{Jobs: []domain.ExternalJob{}}
+	for page := 1; page <= maxPages; page++ {
+		query := url.Values{"state": {"open"}, "per_page": {strconv.Itoa(cfg.Limit)}, "page": {strconv.Itoa(page)}}
+		if len(cfg.Labels) > 0 {
+			labels := make([]string, 0, len(cfg.Labels))
+			for _, label := range cfg.Labels {
+				if value := strings.TrimSpace(label); value != "" {
+					labels = append(labels, value)
+				}
+			}
+			if len(labels) > 0 {
+				query.Set("labels", strings.Join(labels, ","))
+			}
+		}
+		endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?%s", url.PathEscape(cfg.Owner), url.PathEscape(cfg.Repo), query.Encode())
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return domain.FetchResult{}, err
+		}
+		request.Header.Set("Accept", "application/vnd.github+json")
+		request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
+		request.Header.Set("User-Agent", "HireRadar-SourceWorker")
+		resp, err := r.client.Do(request)
+		if err != nil {
+			return domain.FetchResult{}, err
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return domain.FetchResult{}, readErr
+		}
+		if len(body) > maxResponseBytes {
+			return domain.FetchResult{}, errors.New("GitHub response exceeds 32 MiB")
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return domain.FetchResult{}, fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
+		}
+		var rows []json.RawMessage
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return domain.FetchResult{}, fmt.Errorf("decode GitHub issues: %w", err)
+		}
+		for _, raw := range rows {
+			var issue githubIssue
+			if err := json.Unmarshal(raw, &issue); err != nil {
+				return domain.FetchResult{}, err
+			}
+			if len(issue.PullRequest) > 0 || issue.Number < 1 {
+				continue
+			}
+			result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(issue.Number, 10), CompanyName: source.CompanyName, Title: issue.Title, Description: issue.Body, ApplyURL: issue.URL, PublishedAt: parseTime(issue.Created), Raw: raw})
+		}
+		if len(rows) < cfg.Limit {
+			result.NextCursor, _ = json.Marshal(struct {
+				LastPage int `json:"last_page"`
+			}{page})
+			return result, nil
+		}
+	}
+	return domain.FetchResult{}, errors.New("GitHub issue pagination exceeded 100 pages")
 }
 
 func parseTime(value string) *time.Time {

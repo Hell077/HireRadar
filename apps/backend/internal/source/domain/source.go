@@ -14,6 +14,7 @@ const (
 	Greenhouse Type = "greenhouse"
 	Lever      Type = "lever"
 	Ashby      Type = "ashby"
+	GitHub     Type = "github"
 )
 
 type Source struct {

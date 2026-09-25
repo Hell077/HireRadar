@@ -73,6 +73,34 @@ func TestAshbyMapsPublicBoardPostings(t *testing.T) {
 	}
 }
 
+func TestGitHubPaginatesAndExcludesPullRequests(t *testing.T) {
+	requests := 0
+	r := NewRegistry()
+	r.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		if req.URL.Path != "/repos/hireradar/jobs/issues" || req.URL.Query().Get("state") != "open" || req.Header.Get("User-Agent") == "" {
+			t.Fatalf("unexpected GitHub request: %s", req.URL)
+		}
+		if req.URL.Query().Get("labels") != "hiring,backend" {
+			t.Fatalf("labels = %q", req.URL.Query().Get("labels"))
+		}
+		if req.URL.Query().Get("page") == "1" {
+			return response(`[{"number":9,"title":"Go Developer","body":"Apply","html_url":"https://github.com/hireradar/jobs/issues/9","created_at":"2026-01-02T03:04:05Z"},{"number":10,"title":"PR","html_url":"https://github.com/hireradar/jobs/pull/10","pull_request":{"url":"https://api.github.com/repos/hireradar/jobs/pulls/10"}}]`), nil
+		}
+		return response(`[]`), nil
+	})
+	got, err := r.Fetch(context.Background(), domain.Source{Type: domain.GitHub, CompanyName: "HireRadar", Config: []byte(`{"owner":"hireradar","repo":"jobs","labels":["hiring","backend"],"page_size":2}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 || len(got.Jobs) != 1 || got.Jobs[0].ExternalID != "9" || got.Jobs[0].PublishedAt == nil || len(got.NextCursor) == 0 {
+		t.Fatalf("unexpected GitHub result after %d requests: %#v", requests, got)
+	}
+	if !strings.Contains(string(got.Jobs[0].Raw), "Go Developer") {
+		t.Fatalf("raw issue not preserved: %s", got.Jobs[0].Raw)
+	}
+}
+
 func TestRejectsBadBoardAndNonSuccessfulResponse(t *testing.T) {
 	r := NewRegistry()
 	if _, err := r.Fetch(context.Background(), domain.Source{Type: domain.Greenhouse, Config: []byte(`{"board":"../private"}`)}); err == nil {
