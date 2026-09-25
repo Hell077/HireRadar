@@ -131,6 +131,15 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  resume-worker:
+    image: hireradar-backend:local
+    entrypoint: ["/app/resume-worker"]
+    environment: *backend-env
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

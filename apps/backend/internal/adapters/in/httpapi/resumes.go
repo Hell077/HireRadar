@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"strings"
 
 	resumeapp "github.com/Hell077/HireRadar/apps/backend/internal/resume/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/resume/domain"
@@ -17,6 +18,8 @@ type ResumeService interface {
 	Get(context.Context, user.UserID, domain.ID) (resumeapp.Download, error)
 	List(context.Context, user.UserID) ([]domain.Resume, error)
 	Delete(context.Context, user.UserID, domain.ID) error
+	Analysis(context.Context, user.UserID, domain.ID) (domain.ParsedResume, []domain.Suggestion, error)
+	ReviewSuggestion(context.Context, user.UserID, domain.ID, string, bool) error
 }
 
 type resumeAuthInput struct {
@@ -33,6 +36,11 @@ type resumeUploadInput struct {
 type resumeIDInput struct {
 	Authorization string `header:"Authorization" required:"false"`
 	ID            string `path:"id"`
+}
+type resumeSuggestionInput struct {
+	Authorization string `header:"Authorization" required:"false"`
+	ID            string `path:"id"`
+	SuggestionID  string `path:"suggestionID"`
 }
 type resumeUploadOutput struct {
 	Body struct {
@@ -53,6 +61,12 @@ type resumesOutput struct {
 	}
 }
 type emptyOutput struct{}
+type resumeAnalysisOutput struct {
+	Body struct {
+		Analysis    domain.ParsedResume `json:"analysis"`
+		Suggestions []domain.Suggestion `json:"suggestions"`
+	}
+}
 
 func resumeID(raw string) (domain.ID, error) {
 	if _, err := uuid.Parse(raw); err != nil {
@@ -62,6 +76,66 @@ func resumeID(raw string) (domain.ID, error) {
 }
 
 func registerResumes(api huma.API, service ResumeService, verifier AccessVerifier) {
+	huma.Register(api, huma.Operation{OperationID: "resume-analysis", Method: "GET", Path: "/api/v1/resumes/{id}/analysis", Summary: "Get parsed resume and profile suggestions"}, func(ctx context.Context, in *resumeIDInput) (*resumeAnalysisOutput, error) {
+		if service == nil {
+			return nil, huma.Error503ServiceUnavailable("resume processing unavailable")
+		}
+		owner, err := profileUser(in.Authorization, verifier)
+		if err != nil {
+			return nil, err
+		}
+		id, err := resumeID(in.ID)
+		if err != nil {
+			return nil, err
+		}
+		analysis, suggestions, err := service.Analysis(ctx, owner, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, huma.Error404NotFound("resume not found")
+			}
+			if errors.Is(err, domain.ErrAnalysisNotReady) {
+				return nil, huma.Error409Conflict("resume analysis is not ready")
+			}
+			return nil, huma.Error500InternalServerError("could not load resume analysis")
+		}
+		out := &resumeAnalysisOutput{}
+		out.Body.Analysis = analysis
+		out.Body.Suggestions = suggestions
+		return out, nil
+	})
+	for _, decision := range []struct {
+		name   string
+		accept bool
+	}{{name: "accept", accept: true}, {name: "reject"}} {
+		decision := decision
+		huma.Register(api, huma.Operation{OperationID: "resume-suggestion-" + decision.name, Method: "POST", Path: "/api/v1/resumes/{id}/suggestions/{suggestionID}/" + decision.name, Summary: strings.Title(decision.name) + " a profile suggestion", DefaultStatus: 204}, func(ctx context.Context, in *resumeSuggestionInput) (*emptyOutput, error) {
+			if service == nil {
+				return nil, huma.Error503ServiceUnavailable("resume processing unavailable")
+			}
+			owner, err := profileUser(in.Authorization, verifier)
+			if err != nil {
+				return nil, err
+			}
+			id, err := resumeID(in.ID)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := uuid.Parse(in.SuggestionID); err != nil {
+				return nil, huma.Error404NotFound("suggestion not found")
+			}
+			err = service.ReviewSuggestion(ctx, owner, id, in.SuggestionID, decision.accept)
+			if err != nil {
+				if errors.Is(err, domain.ErrNotFound) {
+					return nil, huma.Error404NotFound("suggestion not found")
+				}
+				if errors.Is(err, domain.ErrSuggestionReviewed) {
+					return nil, huma.Error409Conflict("suggestion was already reviewed")
+				}
+				return nil, huma.Error500InternalServerError("could not review suggestion")
+			}
+			return &emptyOutput{}, nil
+		})
+	}
 	huma.Register(api, huma.Operation{OperationID: "resume-list", Method: "GET", Path: "/api/v1/resumes", Summary: "List candidate resumes"}, func(ctx context.Context, in *resumeAuthInput) (*resumesOutput, error) {
 		if service == nil {
 			return nil, huma.Error503ServiceUnavailable("resume storage unavailable")
