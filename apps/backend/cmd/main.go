@@ -26,6 +26,7 @@ import (
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
 	resumepostgres "github.com/Hell077/HireRadar/apps/backend/internal/resume/adapters/postgres"
 	resumeapp "github.com/Hell077/HireRadar/apps/backend/internal/resume/application"
+	sourcepostgres "github.com/Hell077/HireRadar/apps/backend/internal/source/adapters/postgres"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -71,6 +72,7 @@ func run() error {
 		services.Positions = profileService
 		services.Preferences = profileService
 		services.Sources = profileService
+		services.SourceCatalog = sourcepostgres.NewCatalog(client.Pool())
 		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
 			storage, err := s3storage.New(ctx, cfg)
 			if err != nil {

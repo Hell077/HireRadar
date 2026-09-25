@@ -12,7 +12,8 @@ import (
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
-	"github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
+	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
+	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
 
 type failingPinger struct{}
@@ -21,8 +22,41 @@ func (failingPinger) Ping(context.Context) error { return errors.New("down") }
 
 type fakeRegistrar struct{ err error }
 
-func (f fakeRegistrar) Register(context.Context, string, string) (domain.UserID, error) {
+func (f fakeRegistrar) Register(context.Context, string, string) (userdomain.UserID, error) {
 	return "test-user-id", f.err
+}
+
+type fakeSourceCatalog struct {
+	sources []sourcedomain.Source
+	err     error
+}
+
+func (f fakeSourceCatalog) ListEnabled(context.Context) ([]sourcedomain.Source, error) {
+	return f.sources, f.err
+}
+
+func TestPublicSourceCatalog(t *testing.T) {
+	app := New(health.NewService(), AuthServices{SourceCatalog: fakeSourceCatalog{sources: []sourcedomain.Source{{ID: "acme", Name: "Acme", Type: sourcedomain.Greenhouse, CompanyName: "Acme", Enabled: true}}}})
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/sources", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.StatusCode)
+	}
+	var body struct {
+		Sources []struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"sources"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Sources) != 1 || body.Sources[0].ID != "acme" || body.Sources[0].Type != "greenhouse" {
+		t.Fatalf("unexpected source response: %+v", body)
+	}
 }
 
 type fakeSessions struct{ err error }

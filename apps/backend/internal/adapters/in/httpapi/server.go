@@ -20,17 +20,18 @@ type healthOutput struct {
 }
 
 type AuthServices struct {
-	Registrar   Registrar
-	Sessions    Sessions
-	Email       EmailActions
-	Limiter     AuthLimiter
-	Profile     ProfileService
-	Skills      SkillService
-	Positions   PositionService
-	Preferences PreferencesService
-	Sources     SourcePreferenceService
-	Resumes     ResumeService
-	Verifier    AccessVerifier
+	Registrar     Registrar
+	Sessions      Sessions
+	Email         EmailActions
+	Limiter       AuthLimiter
+	Profile       ProfileService
+	Skills        SkillService
+	Positions     PositionService
+	Preferences   PreferencesService
+	Sources       SourcePreferenceService
+	Resumes       ResumeService
+	SourceCatalog SourceCatalog
+	Verifier      AccessVerifier
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -95,6 +96,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.Preferences = auth[0].Preferences
 		services.Sources = auth[0].Sources
 		services.Resumes = auth[0].Resumes
+		services.SourceCatalog = auth[0].SourceCatalog
 		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
@@ -106,6 +108,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerPreferences(api, services.Preferences, services.Verifier)
 	registerSourcePreferences(api, services.Sources, services.Verifier)
 	registerResumes(api, services.Resumes, services.Verifier)
+	registerSources(api, services.SourceCatalog)
 
 	return app
 }
