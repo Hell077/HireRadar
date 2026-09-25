@@ -24,7 +24,10 @@ type Worker struct {
 	}
 	parallelism int
 	jobs        *jobpostgres.Ingestor
+	reportError func(error)
 }
+
+func (w *Worker) SetErrorReporter(report func(error)) { w.reportError = report }
 
 func NewWorker(pool *pgxpool.Pool, fetcher interface {
 	Fetch(context.Context, domain.Source) (domain.FetchResult, error)
@@ -44,6 +47,9 @@ func (w *Worker) Run(ctx context.Context) error {
 		sources, err := w.claimDue(ctx)
 		if err != nil && ctx.Err() == nil {
 			slog.Error("claim due sources failed", "error", err)
+			if w.reportError != nil {
+				w.reportError(err)
+			}
 		}
 		if len(sources) > 0 {
 			var group sync.WaitGroup
@@ -54,6 +60,11 @@ func (w *Worker) Run(ctx context.Context) error {
 					defer group.Done()
 					if err := w.syncSource(ctx, source); err != nil && ctx.Err() == nil {
 						slog.Error("source sync failed", "source_id", source.ID, "error", err)
+						if w.reportError != nil {
+							w.reportError(err)
+						}
+					} else if w.reportError != nil {
+						w.reportError(nil)
 					}
 				}()
 			}

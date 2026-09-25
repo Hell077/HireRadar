@@ -108,6 +108,9 @@ func Load() (Config, error) {
 		if cfg.S3Endpoint == "" || cfg.S3PublicEndpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" {
 			return Config{}, fmt.Errorf("S3_ENDPOINT, S3_PUBLIC_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, and S3_SECRET_KEY are required in production")
 		}
+		if cfg.OperatorAPIToken == "" {
+			return Config{}, fmt.Errorf("OPERATOR_API_TOKEN is required in production")
+		}
 	}
 	if cfg.OperatorAPIToken != "" && len(cfg.OperatorAPIToken) < 32 {
 		return Config{}, fmt.Errorf("OPERATOR_API_TOKEN must contain at least 32 characters when configured")

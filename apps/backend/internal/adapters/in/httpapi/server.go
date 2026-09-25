@@ -48,6 +48,7 @@ type AuthServices struct {
 	SourceCatalog         SourceCatalog
 	SourceOperations      SourceOperations
 	OperatorAPIToken      string
+	Services              ServiceController
 	Jobs                  JobCatalog
 	Matches               MatchService
 	Telegram              TelegramService
@@ -153,6 +154,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.SourceCatalog = auth[0].SourceCatalog
 		services.SourceOperations = auth[0].SourceOperations
 		services.OperatorAPIToken = auth[0].OperatorAPIToken
+		services.Services = auth[0].Services
 		services.Jobs = auth[0].Jobs
 		services.Matches = auth[0].Matches
 		services.Telegram = auth[0].Telegram
@@ -170,6 +172,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerResumes(api, services.Resumes, services.Verifier)
 	registerSources(api, services.SourceCatalog)
 	registerSourceOperations(api, services.SourceOperations, services.OperatorAPIToken)
+	registerServices(api, services.Services, services.OperatorAPIToken)
 	registerJobs(api, services.Jobs)
 	registerMatches(api, services.Matches, services.Verifier)
 	registerTelegram(api, services.Telegram, services.Verifier, services.TelegramWebhookSecret)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
+	"github.com/Hell077/HireRadar/apps/backend/internal/lifecycle"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
@@ -193,6 +194,56 @@ func TestAdminSourceOperationsRequireOperatorToken(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status=%d want 401", response.StatusCode)
+	}
+}
+
+func TestAdminServiceControlsRequireOperatorTokenAndExposeStatus(t *testing.T) {
+	manager := lifecycle.New()
+	if err := manager.Register("fixture", false, "disabled for test", nil); err != nil {
+		t.Fatal(err)
+	}
+	secret := "01234567890123456789012345678901"
+	app := New(health.NewService(), AuthServices{OperatorAPIToken: secret, Services: manager})
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/admin/services", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status=%d want 401", response.StatusCode)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/services", nil)
+	request.Header.Set("X-Operator-Token", secret)
+	response, err = app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("authenticated status=%d want 200", response.StatusCode)
+	}
+	var body struct {
+		Services []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"services"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Services) != 1 || body.Services[0].Name != "fixture" || body.Services[0].State != "disabled" {
+		t.Fatalf("unexpected services: %+v", body.Services)
+	}
+	action := httptest.NewRequest(http.MethodPost, "/api/v1/admin/services/fixture", strings.NewReader(`{"action":"start"}`))
+	action.Header.Set("Content-Type", "application/json")
+	action.Header.Set("X-Operator-Token", secret)
+	response, err = app.Test(action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("disabled service action status=%d want 400", response.StatusCode)
 	}
 }
 

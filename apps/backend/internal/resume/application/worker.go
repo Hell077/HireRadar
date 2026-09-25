@@ -29,9 +29,12 @@ type ResumeObjectReader interface {
 }
 
 type Worker struct {
-	store   ProcessingStore
-	objects ResumeObjectReader
+	store       ProcessingStore
+	objects     ResumeObjectReader
+	reportError func(error)
 }
+
+func (w *Worker) SetErrorReporter(report func(error)) { w.reportError = report }
 
 func NewWorker(store ProcessingStore, objects ResumeObjectReader) *Worker {
 	return &Worker{store: store, objects: objects}
@@ -84,6 +87,11 @@ func (w *Worker) Run(ctx context.Context) error {
 		found, err := w.ProcessNext(ctx)
 		if err != nil && ctx.Err() == nil {
 			slog.Error("resume processing failed", "error", err)
+			if w.reportError != nil {
+				w.reportError(err)
+			}
+		} else if err == nil && found && w.reportError != nil {
+			w.reportError(nil)
 		}
 		if found && err == nil {
 			continue
