@@ -10,7 +10,9 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	profiledomain "github.com/Hell077/HireRadar/apps/backend/internal/profile/domain"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -165,13 +167,16 @@ func (s *Store) SaveJobMatch(ctx context.Context, userID user.UserID, result eng
 		}
 		return nil
 	}
-	components, err := json.Marshal(result.Components)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("encode job match explanation: %w", err)
+		return fmt.Errorf("begin job match save: %w", err)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,$3,$4::jsonb)
-		ON CONFLICT(user_id,job_id) DO UPDATE SET score=EXCLUDED.score,components=EXCLUDED.components,computed_at=now()`, string(userID), result.JobID, result.Score, components); err != nil {
-		return fmt.Errorf("save job match: %w", err)
+	defer tx.Rollback(ctx)
+	if err := upsertMatch(ctx, tx, userID, result); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit job match: %w", err)
 	}
 	return nil
 }
@@ -190,17 +195,39 @@ func (s *Store) SaveMatches(ctx context.Context, userID user.UserID, matches []e
 		return fmt.Errorf("remove stale matches: %w", err)
 	}
 	for _, match := range matches {
-		components, err := json.Marshal(match.Components)
-		if err != nil {
-			return fmt.Errorf("encode match explanation: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,$3,$4::jsonb)
-			ON CONFLICT(user_id,job_id) DO UPDATE SET score=EXCLUDED.score,components=EXCLUDED.components,computed_at=now()`, string(userID), match.JobID, match.Score, components); err != nil {
-			return fmt.Errorf("save match: %w", err)
+		if err := upsertMatch(ctx, tx, userID, match); err != nil {
+			return err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit match refresh: %w", err)
+	}
+	return nil
+}
+
+type matchExecer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func upsertMatch(ctx context.Context, exec matchExecer, userID user.UserID, match engine.Result) error {
+	components, err := json.Marshal(match.Components)
+	if err != nil {
+		return fmt.Errorf("encode match explanation: %w", err)
+	}
+	tag, err := exec.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,$3,$4::jsonb)
+		ON CONFLICT(user_id,job_id) DO NOTHING`, string(userID), match.JobID, match.Score, components)
+	if err != nil {
+		return fmt.Errorf("save match: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := exec.Exec(ctx, `UPDATE user_job_matches SET score=$3,components=$4::jsonb,computed_at=now() WHERE user_id=$1 AND job_id=$2`, string(userID), match.JobID, match.Score, components); err != nil {
+			return fmt.Errorf("update match: %w", err)
+		}
+		return nil
+	}
+	if _, err := exec.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload)
+		VALUES($1,'match.created','match',$2,jsonb_build_object('user_id',$3::text,'job_id',$2::text,'score',$4::int))`, uuid.NewString(), match.JobID, string(userID), match.Score); err != nil {
+		return fmt.Errorf("emit job matched event: %w", err)
 	}
 	return nil
 }

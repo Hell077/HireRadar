@@ -92,6 +92,9 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_job_matches WHERE user_id=$1`, userID).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("persisted match count=%d err=%v", count, err)
 	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE event_type='match.created' AND payload->>'user_id'=$1 AND payload->>'job_id'=$2`, userID, goodID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("match event count=%d err=%v", count, err)
+	}
 	eventID := uuid.NewString()
 	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'profile.changed','user',$2,jsonb_build_object('user_id',$2::text))`, eventID, userID); err != nil {
 		t.Fatal(err)
