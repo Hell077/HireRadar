@@ -171,6 +171,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get job preferences */
+        get: operations["profile-preferences-get"];
+        /** Update job preferences */
+        put: operations["profile-preferences-put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/skills": {
         parameters: {
             query?: never;
@@ -182,6 +200,24 @@ export interface paths {
         get: operations["profile-skills-get"];
         /** Replace candidate skills */
         put: operations["profile-skills-put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get source preferences */
+        get: operations["profile-sources-get"];
+        /** Update source preferences */
+        put: operations["profile-sources-put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -299,6 +335,24 @@ export interface components {
             readonly $schema?: string;
             positions: string[] | null;
         };
+        Preferences: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Preferences.json
+             */
+            readonly $schema?: string;
+            allowed_regions: string[] | null;
+            employment_types: string[] | null;
+            excluded_countries: string[] | null;
+            /** Format: int64 */
+            maximum_job_age_days: number;
+            /** Format: int64 */
+            minimum_match_score: number;
+            minimum_salary?: components["schemas"]["Money"];
+            notifications_enabled: boolean;
+            remote_policies: string[] | null;
+        };
         Profile: {
             /**
              * Format: uri
@@ -386,6 +440,28 @@ export interface components {
              */
             readonly $schema?: string;
             skills: components["schemas"]["Skill"][] | null;
+        };
+        SourcePreference: {
+            enabled: boolean;
+            source_id: string;
+        };
+        SourcePreferencesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SourcePreferencesOutputBody.json
+             */
+            readonly $schema?: string;
+            sources: components["schemas"]["SourcePreference"][] | null;
+        };
+        SourcePreferencesPutInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SourcePreferencesPutInputBody.json
+             */
+            readonly $schema?: string;
+            sources: components["schemas"]["SourcePreference"][] | null;
         };
         TokenOutputBody: {
             /**
@@ -803,6 +879,72 @@ export interface operations {
             };
         };
     };
+    "profile-preferences-get": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "profile-preferences-put": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Preferences"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "profile-skills-get": {
         parameters: {
             query?: never;
@@ -856,6 +998,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "profile-sources-get": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePreferencesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "profile-sources-put": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcePreferencesPutInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePreferencesOutputBody"];
                 };
             };
             /** @description Error */

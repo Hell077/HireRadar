@@ -66,6 +66,8 @@ func run() error {
 		services.Profile = profileService
 		services.Skills = profileService
 		services.Positions = profileService
+		services.Preferences = profileService
+		services.Sources = profileService
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
 			if err != nil {
