@@ -12,28 +12,29 @@ import (
 const MaxFileSize int64 = 10 << 20
 
 var ErrInvalidResume = errors.New("invalid resume upload")
+var ErrNotFound = errors.New("resume not found")
 
 type ID string
 type Status string
 
 const (
 	StatusPendingUpload Status = "pending_upload"
-	StatusUploaded Status = "uploaded"
-	StatusProcessing Status = "processing"
-	StatusProcessed Status = "processed"
-	StatusFailed Status = "failed"
-	StatusDeleted Status = "deleted"
+	StatusUploaded      Status = "uploaded"
+	StatusProcessing    Status = "processing"
+	StatusProcessed     Status = "processed"
+	StatusFailed        Status = "failed"
+	StatusDeleted       Status = "deleted"
 )
 
 type Resume struct {
-	ID ID `json:"id"`
-	UserID user.UserID `json:"-"`
-	FileName string `json:"file_name"`
-	ContentType string `json:"content_type"`
-	Size int64 `json:"size"`
-	Status Status `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          ID          `json:"id"`
+	UserID      user.UserID `json:"-"`
+	FileName    string      `json:"file_name"`
+	ContentType string      `json:"content_type"`
+	Size        int64       `json:"size"`
+	Status      Status      `json:"status"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 func ValidateUpload(fileName, contentType string, size int64) (string, error) {
