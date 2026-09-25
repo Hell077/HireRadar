@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
 	"github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +23,7 @@ type Worker struct {
 		Fetch(context.Context, domain.Source) (domain.FetchResult, error)
 	}
 	parallelism int
+	jobs        *jobpostgres.Ingestor
 }
 
 func NewWorker(pool *pgxpool.Pool, fetcher interface {
@@ -33,7 +35,7 @@ func NewWorker(pool *pgxpool.Pool, fetcher interface {
 	if parallelism > 32 {
 		parallelism = 32
 	}
-	return &Worker{pool: pool, fetcher: fetcher, parallelism: parallelism}
+	return &Worker{pool: pool, fetcher: fetcher, parallelism: parallelism, jobs: jobpostgres.NewIngestor()}
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -136,28 +138,29 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 		job.Title = strings.TrimSpace(job.Title)
 		job.ApplyURL = strings.TrimSpace(job.ApplyURL)
 		if job.ExternalID == "" || job.Title == "" || job.ApplyURL == "" {
-			continue
+			return 0, 0, fmt.Errorf("source %s returned job with missing external ID, title, or apply URL", source.ID)
 		}
 		payload, err := json.Marshal(job)
 		if err != nil {
 			return 0, 0, err
 		}
 		hash := sha256.Sum256(payload)
-		var existed bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM raw_jobs WHERE source_id=$1 AND external_id=$2)", source.ID, job.ExternalID).Scan(&existed); err != nil {
-			return 0, 0, err
-		}
-		tag, err := tx.Exec(ctx, `INSERT INTO raw_jobs(source_id,external_id,content_hash,payload) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(source_id,external_id,content_hash) DO NOTHING`, source.ID, job.ExternalID, hash[:], payload)
+		_, err = tx.Exec(ctx, `INSERT INTO raw_jobs(source_id,external_id,content_hash,payload) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(source_id,external_id,content_hash) DO NOTHING`, source.ID, job.ExternalID, hash[:], payload)
 		if err != nil {
 			return 0, 0, fmt.Errorf("persist raw job %s: %w", job.ExternalID, err)
 		}
-		if tag.RowsAffected() == 1 {
-			if existed {
-				updatedCount++
-			} else {
-				newCount++
-			}
+		created, updated, err := w.jobs.Save(ctx, tx, source, runID, job)
+		if err != nil {
+			return 0, 0, fmt.Errorf("normalize source job %s: %w", job.ExternalID, err)
 		}
+		if created {
+			newCount++
+		} else if updated {
+			updatedCount++
+		}
+	}
+	if err := w.jobs.CloseMissing(ctx, tx, source.ID, runID); err != nil {
+		return 0, 0, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE sources SET cursor=$2::jsonb,last_sync_at=now(),next_sync_at=now()+make_interval(secs=>sync_interval_seconds),updated_at=now() WHERE id=$1`, source.ID, nonNullJSON(result.NextCursor)); err != nil {
 		return 0, 0, err
