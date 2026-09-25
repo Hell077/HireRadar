@@ -37,6 +37,26 @@ func TestClassifyLocationRetainsExplicitCountryCodes(t *testing.T) {
 	}
 }
 
+func TestClassifySeniorityAndExtractSkills(t *testing.T) {
+	for title, want := range map[string]jobdomain.Seniority{"Senior Go Engineer": jobdomain.Senior, "Jr Backend Developer": jobdomain.Junior, "Principal Engineer": jobdomain.Principal, "Engineering Manager": jobdomain.Manager, "Product Designer": jobdomain.SeniorityUnknown} {
+		if got := ClassifySeniority(title); got != want {
+			t.Errorf("ClassifySeniority(%q)=%s want %s", title, got, want)
+		}
+	}
+	vocabulary := []SkillTerm{{ID: "go", Name: "Go", Normalized: "go"}, {ID: "golang", Name: "Golang", Normalized: "golang"}, {ID: "postgres", Name: "PostgreSQL", Normalized: "postgresql"}, {ID: "docker", Name: "Docker", Normalized: "docker"}}
+	got := ExtractSkills("Senior Engineer with Go, PostgreSQL and Docker experience; Golang is also mentioned.", vocabulary)
+	if len(got) != 4 {
+		t.Fatalf("skills=%+v", got)
+	}
+	if got := ExtractSkills("We are a Google team", vocabulary); len(got) != 0 {
+		t.Fatalf("matched skills in unrelated word: %+v", got)
+	}
+	aliases := []SkillTerm{{ID: "go-id", Name: "Go", Normalized: "go"}, {ID: "go-id", Name: "Go", Normalized: "golang"}}
+	if got := ExtractSkills("Go and Golang", aliases); len(got) != 1 || got[0].ID != "go-id" {
+		t.Fatalf("skill alias produced duplicate job skills: %+v", got)
+	}
+}
+
 func TestNormalizationPreservesDisplayDataAndCanonicalizesKeys(t *testing.T) {
 	if got := CompanyKey("Acme, Inc."); got != "acme" {
 		t.Fatalf("company key=%q", got)

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -84,7 +85,7 @@ func (c *Catalog) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		conditions = append(conditions, fmt.Sprintf("(j.created_at,j.id)<($%d,$%d::uuid)", n, n+1))
 	}
 	args = append(args, q.Limit+1)
-	query := `SELECT j.id::text,j.company_id::text,c.name,j.title,j.normalized_title,j.description,j.employment_types,j.remote_policy,j.location,j.location_countries,j.eligibility,j.apply_url,j.published_at,j.first_seen_at,j.last_seen_at,j.status,j.source_priority,j.created_at,j.updated_at
+	query := `SELECT j.id::text,j.company_id::text,c.name,j.title,j.normalized_title,j.seniority,j.description,j.employment_types,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',s.id::text,'name',s.name,'required',js.required,'confidence',js.confidence)) FROM job_skills js JOIN skills s ON s.id=js.skill_id WHERE js.job_id=j.id),'[]'::jsonb)::text,j.remote_policy,j.location,j.location_countries,j.eligibility,j.apply_url,j.published_at,j.first_seen_at,j.last_seen_at,j.status,j.source_priority,j.created_at,j.updated_at
 		FROM jobs j JOIN companies c ON c.id=j.company_id WHERE ` + strings.Join(conditions, " AND ") + fmt.Sprintf(" ORDER BY j.created_at DESC,j.id DESC LIMIT $%d", len(args))
 	rows, err := c.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -94,8 +95,12 @@ func (c *Catalog) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	items := []jobdomain.Job{}
 	for rows.Next() {
 		var item jobdomain.Job
-		if err := rows.Scan(&item.ID, &item.CompanyID, &item.Company, &item.Title, &item.NormalizedTitle, &item.Description, &item.EmploymentTypes, &item.RemotePolicy, &item.Location, &item.Countries, &item.Eligibility, &item.ApplyURL, &item.PublishedAt, &item.FirstSeenAt, &item.LastSeenAt, &item.Status, &item.SourcePriority, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var skillsJSON []byte
+		if err := rows.Scan(&item.ID, &item.CompanyID, &item.Company, &item.Title, &item.NormalizedTitle, &item.Seniority, &item.Description, &item.EmploymentTypes, &skillsJSON, &item.RemotePolicy, &item.Location, &item.Countries, &item.Eligibility, &item.ApplyURL, &item.PublishedAt, &item.FirstSeenAt, &item.LastSeenAt, &item.Status, &item.SourcePriority, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return ListResult{}, err
+		}
+		if err := json.Unmarshal(skillsJSON, &item.Skills); err != nil {
+			return ListResult{}, fmt.Errorf("decode job skills: %w", err)
 		}
 		items = append(items, item)
 	}
@@ -116,12 +121,16 @@ func (c *Catalog) Get(ctx context.Context, id string) (jobdomain.Job, error) {
 		return jobdomain.Job{}, jobdomain.ErrInvalidQuery
 	}
 	var item jobdomain.Job
-	err := c.pool.QueryRow(ctx, `SELECT j.id::text,j.company_id::text,c.name,j.title,j.normalized_title,j.description,j.employment_types,j.remote_policy,j.location,j.location_countries,j.eligibility,j.apply_url,j.published_at,j.first_seen_at,j.last_seen_at,j.status,j.source_priority,j.created_at,j.updated_at FROM jobs j JOIN companies c ON c.id=j.company_id WHERE j.id=$1`, id).Scan(&item.ID, &item.CompanyID, &item.Company, &item.Title, &item.NormalizedTitle, &item.Description, &item.EmploymentTypes, &item.RemotePolicy, &item.Location, &item.Countries, &item.Eligibility, &item.ApplyURL, &item.PublishedAt, &item.FirstSeenAt, &item.LastSeenAt, &item.Status, &item.SourcePriority, &item.CreatedAt, &item.UpdatedAt)
+	var skillsJSON []byte
+	err := c.pool.QueryRow(ctx, `SELECT j.id::text,j.company_id::text,c.name,j.title,j.normalized_title,j.seniority,j.description,j.employment_types,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',s.id::text,'name',s.name,'required',js.required,'confidence',js.confidence)) FROM job_skills js JOIN skills s ON s.id=js.skill_id WHERE js.job_id=j.id),'[]'::jsonb)::text,j.remote_policy,j.location,j.location_countries,j.eligibility,j.apply_url,j.published_at,j.first_seen_at,j.last_seen_at,j.status,j.source_priority,j.created_at,j.updated_at FROM jobs j JOIN companies c ON c.id=j.company_id WHERE j.id=$1`, id).Scan(&item.ID, &item.CompanyID, &item.Company, &item.Title, &item.NormalizedTitle, &item.Seniority, &item.Description, &item.EmploymentTypes, &skillsJSON, &item.RemotePolicy, &item.Location, &item.Countries, &item.Eligibility, &item.ApplyURL, &item.PublishedAt, &item.FirstSeenAt, &item.LastSeenAt, &item.Status, &item.SourcePriority, &item.CreatedAt, &item.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return jobdomain.Job{}, pgx.ErrNoRows
 	}
 	if err != nil {
 		return jobdomain.Job{}, fmt.Errorf("get job: %w", err)
+	}
+	if err := json.Unmarshal(skillsJSON, &item.Skills); err != nil {
+		return jobdomain.Job{}, fmt.Errorf("decode job skills: %w", err)
 	}
 	return item, nil
 }

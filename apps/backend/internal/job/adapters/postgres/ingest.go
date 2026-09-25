@@ -21,8 +21,26 @@ type Ingestor struct{}
 
 func NewIngestor() *Ingestor { return &Ingestor{} }
 
-func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Source, runID string, external sourcedomain.ExternalJob) (created, updated bool, err error) {
+func (i *Ingestor) LoadSkillVocabulary(ctx context.Context, tx pgx.Tx) ([]normalization.SkillTerm, error) {
+	rows, err := tx.Query(ctx, `SELECT s.id::text,s.name,s.normalized_name FROM skills s UNION ALL SELECT s.id::text,s.name,a.normalized_alias FROM skill_aliases a JOIN skills s ON s.id=a.skill_id ORDER BY 2,3`)
+	if err != nil {
+		return nil, fmt.Errorf("load job skill vocabulary: %w", err)
+	}
+	defer rows.Close()
+	terms := []normalization.SkillTerm{}
+	for rows.Next() {
+		var term normalization.SkillTerm
+		if err := rows.Scan(&term.ID, &term.Name, &term.Normalized); err != nil {
+			return nil, err
+		}
+		terms = append(terms, term)
+	}
+	return terms, rows.Err()
+}
+
+func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Source, runID string, external sourcedomain.ExternalJob, vocabulary []normalization.SkillTerm) (created, updated bool, err error) {
 	job := normalization.Normalize(source, external)
+	job.Skills = normalization.ExtractSkills(job.Title+"\n"+job.Description, vocabulary)
 	companyKey := normalization.CompanyKey(job.Company)
 	if companyKey == "" {
 		companyKey = "unknown " + source.ID
@@ -44,7 +62,7 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 	}
 	if !found {
 		jobID = uuid.NewString()
-		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,description,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''),$13,$14,'active',$15)`, jobID, companyID, job.Title, job.NormalizedTitle, job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority)
+		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15,'active',$16)`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority)
 		if err != nil {
 			return false, false, fmt.Errorf("insert normalized job: %w", err)
 		}
@@ -53,16 +71,16 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 		allowReplace := sameSource || source.Priority <= priority
 		if allowReplace {
 			var before struct {
-				title, description, location, applyURL string
-				remotePolicy, eligibility, status      string
-				employmentTypes, countries             []string
-				publishedAt                            *time.Time
+				title, description, location, applyURL       string
+				remotePolicy, eligibility, status, seniority string
+				employmentTypes, countries                   []string
+				publishedAt                                  *time.Time
 			}
-			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,employment_types,location_countries,published_at FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.employmentTypes, &before.countries, &before.publishedAt); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,seniority,employment_types,location_countries,published_at FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.seniority, &before.employmentTypes, &before.countries, &before.publishedAt); err != nil {
 				return false, false, err
 			}
-			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt)
-			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,description=$5,employment_types=$6,remote_policy=$7,location=$8,location_countries=$9,eligibility=$10,apply_url=$11,canonical_url=NULLIF($12,''),published_at=$13,fingerprint=$14,source_priority=$15,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $16 THEN now() ELSE updated_at END WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated)
+			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || before.seniority != string(job.Seniority) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt)
+			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,seniority=$5,description=$6,employment_types=$7,remote_policy=$8,location=$9,location_countries=$10,eligibility=$11,apply_url=$12,canonical_url=NULLIF($13,''),published_at=$14,fingerprint=$15,source_priority=$16,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $17 THEN now() ELSE updated_at END WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated)
 			if err != nil {
 				return false, false, fmt.Errorf("update normalized job: %w", err)
 			}
@@ -70,6 +88,16 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 			_, err = tx.Exec(ctx, `UPDATE jobs SET status='active',closed_at=NULL,last_seen_at=now() WHERE id=$1`, jobID)
 			if err != nil {
 				return false, false, err
+			}
+		}
+	}
+	if created || updated || sameSource {
+		if _, err := tx.Exec(ctx, "DELETE FROM job_skills WHERE job_id=$1", jobID); err != nil {
+			return false, false, fmt.Errorf("replace normalized job skills: %w", err)
+		}
+		for _, skill := range job.Skills {
+			if _, err := tx.Exec(ctx, `INSERT INTO job_skills(job_id,skill_id,required,confidence) VALUES($1,$2,false,$3) ON CONFLICT(job_id,skill_id) DO UPDATE SET required=EXCLUDED.required,confidence=EXCLUDED.confidence`, jobID, skill.ID, skill.Confidence); err != nil {
+				return false, false, fmt.Errorf("save normalized job skill: %w", err)
 			}
 		}
 	}

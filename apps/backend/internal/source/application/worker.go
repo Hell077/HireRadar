@@ -133,6 +133,10 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 	}
 	defer tx.Rollback(ctx)
 	var newCount, updatedCount int
+	vocabulary, err := w.jobs.LoadSkillVocabulary(ctx, tx)
+	if err != nil {
+		return 0, 0, err
+	}
 	for _, job := range result.Jobs {
 		job.ExternalID = strings.TrimSpace(job.ExternalID)
 		job.Title = strings.TrimSpace(job.Title)
@@ -149,7 +153,7 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 		if err != nil {
 			return 0, 0, fmt.Errorf("persist raw job %s: %w", job.ExternalID, err)
 		}
-		created, updated, err := w.jobs.Save(ctx, tx, source, runID, job)
+		created, updated, err := w.jobs.Save(ctx, tx, source, runID, job, vocabulary)
 		if err != nil {
 			return 0, 0, fmt.Errorf("normalize source job %s: %w", job.ExternalID, err)
 		}

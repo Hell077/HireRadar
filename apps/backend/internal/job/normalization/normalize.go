@@ -4,6 +4,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"unicode"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
@@ -47,7 +48,80 @@ func Normalize(source sourcedomain.Source, external sourcedomain.ExternalJob) jo
 	if value := strings.TrimSpace(external.EmploymentType); value != "" {
 		types = append(types, value)
 	}
-	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Description: CleanDescription(external.Description), EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+	description := CleanDescription(external.Description)
+	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: ClassifySeniority(external.Title), Description: description, EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+}
+
+type SkillTerm struct{ ID, Name, Normalized string }
+
+func ExtractSkills(text string, vocabulary []SkillTerm) []jobdomain.JobSkill {
+	result := []jobdomain.JobSkill{}
+	seen := map[string]bool{}
+	for _, term := range vocabulary {
+		if term.ID == "" || term.Name == "" || term.Normalized == "" || seen[term.ID] {
+			continue
+		}
+		if containsTerm(text, term.Name) || containsTerm(text, term.Normalized) {
+			result = append(result, jobdomain.JobSkill{ID: term.ID, Name: term.Name, Required: false, Confidence: 0.78})
+			seen[term.ID] = true
+		}
+	}
+	return result
+}
+
+func ClassifySeniority(title string) jobdomain.Seniority {
+	value := strings.ToLower(title)
+	switch {
+	case containsTerm(value, "intern"), containsTerm(value, "internship"):
+		return jobdomain.Intern
+	case containsTerm(value, "junior"), containsTerm(value, "jr"):
+		return jobdomain.Junior
+	case containsTerm(value, "principal"):
+		return jobdomain.Principal
+	case containsTerm(value, "staff"):
+		return jobdomain.Staff
+	case containsTerm(value, "director"):
+		return jobdomain.Director
+	case containsTerm(value, "vp"), containsTerm(value, "vice president"), containsTerm(value, "chief"):
+		return jobdomain.Executive
+	case containsTerm(value, "manager"):
+		return jobdomain.Manager
+	case containsTerm(value, "lead"):
+		return jobdomain.Lead
+	case containsTerm(value, "senior"), containsTerm(value, "sr"):
+		return jobdomain.Senior
+	case containsTerm(value, "mid-level"), containsTerm(value, "mid level"), containsTerm(value, "middle"):
+		return jobdomain.Mid
+	default:
+		return jobdomain.SeniorityUnknown
+	}
+}
+
+func containsTerm(text, term string) bool {
+	textRunes := []rune(strings.ToLower(text))
+	needle := []rune(strings.ToLower(strings.TrimSpace(term)))
+	if len(needle) == 0 {
+		return false
+	}
+	for start := 0; start+len(needle) <= len(textRunes); start++ {
+		match := true
+		for index, r := range needle {
+			if textRunes[start+index] != r {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+		before := start == 0 || !unicode.IsLetter(textRunes[start-1]) && !unicode.IsDigit(textRunes[start-1])
+		end := start + len(needle)
+		after := end == len(textRunes) || !unicode.IsLetter(textRunes[end]) && !unicode.IsDigit(textRunes[end])
+		if before && after {
+			return true
+		}
+	}
+	return false
 }
 
 func ClassifyLocation(raw string) (jobdomain.RemotePolicy, jobdomain.Eligibility, []string) {

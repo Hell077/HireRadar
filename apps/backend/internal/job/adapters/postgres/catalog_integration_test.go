@@ -46,8 +46,13 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	}
 	ingestor := NewIngestor()
 	for n, location := range []string{"Remote — Kazakhstan", "Remote — US only"} {
-		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
-		if _, _, err := ingestor.Save(ctx, tx, sourcedomain.Source{ID: sourceID, CompanyName: company, Priority: 10}, runID, external); err != nil {
+		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Description: "Uses Go for backend engineering.", Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
+		vocabulary, err := ingestor.LoadSkillVocabulary(ctx, tx)
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+		if _, _, err := ingestor.Save(ctx, tx, sourcedomain.Source{ID: sourceID, CompanyName: company, Priority: 10}, runID, external, vocabulary); err != nil {
 			_ = tx.Rollback(ctx)
 			t.Fatal(err)
 		}
@@ -76,6 +81,12 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	}
 	if len(filtered.Items) != 1 || filtered.Items[0].Eligibility != jobdomain.Eligible || filtered.Items[0].Location != "Remote — Kazakhstan" {
 		t.Fatalf("country filter did not isolate Kazakhstan job: %+v", filtered)
+	}
+	if len(filtered.Items[0].Skills) == 0 || filtered.Items[0].Skills[0].Name != "Go" {
+		t.Fatalf("job skills were not extracted from the catalog: %+v", filtered.Items[0].Skills)
+	}
+	if got, err := catalog.Get(ctx, filtered.Items[0].ID); err != nil || len(got.Skills) == 0 {
+		t.Fatalf("get normalized job skills = %+v, %v", got, err)
 	}
 	if _, err := catalog.List(ctx, ListQuery{Cursor: "broken", Limit: 1}); !errors.Is(err, jobdomain.ErrInvalidCursor) {
 		t.Fatalf("invalid cursor error = %v", err)

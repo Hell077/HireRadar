@@ -37,6 +37,29 @@ const (
 	Unknown Status = "unknown"
 )
 
+type Seniority string
+
+const (
+	Intern           Seniority = "intern"
+	Junior           Seniority = "junior"
+	Mid              Seniority = "mid"
+	Senior           Seniority = "senior"
+	Staff            Seniority = "staff"
+	Principal        Seniority = "principal"
+	Lead             Seniority = "lead"
+	Manager          Seniority = "manager"
+	Director         Seniority = "director"
+	Executive        Seniority = "executive"
+	SeniorityUnknown Seniority = "unknown"
+)
+
+type JobSkill struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Required   bool    `json:"required"`
+	Confidence float64 `json:"confidence"`
+}
+
 type Company struct {
 	ID             string       `json:"id"`
 	Name           string       `json:"name"`
@@ -54,7 +77,9 @@ type Job struct {
 	Company         string       `json:"company"`
 	Title           string       `json:"title"`
 	NormalizedTitle string       `json:"normalized_title"`
+	Seniority       Seniority    `json:"seniority"`
 	Description     string       `json:"description"`
+	Skills          []JobSkill   `json:"skills"`
 	EmploymentTypes []string     `json:"employment_types"`
 	RemotePolicy    RemotePolicy `json:"remote_policy"`
 	Location        string       `json:"location"`
