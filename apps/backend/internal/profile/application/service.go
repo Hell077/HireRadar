@@ -12,6 +12,8 @@ type Store interface {
 	Save(context.Context, domain.Profile) error
 	GetSkills(context.Context, user.UserID) ([]domain.Skill, error)
 	SaveSkills(context.Context, user.UserID, []domain.Skill) error
+	GetPositions(context.Context, user.UserID) ([]string, error)
+	SavePositions(context.Context, user.UserID, []string) error
 }
 
 type Service struct{ store Store }
@@ -40,4 +42,16 @@ func (s *Service) SaveSkills(ctx context.Context, userID user.UserID, skills []d
 		return err
 	}
 	return s.store.SaveSkills(ctx, userID, normalized)
+}
+
+func (s *Service) GetPositions(ctx context.Context, userID user.UserID) ([]string, error) {
+	return s.store.GetPositions(ctx, userID)
+}
+
+func (s *Service) SavePositions(ctx context.Context, userID user.UserID, titles []string) error {
+	normalized, err := domain.NormalizePositions(titles)
+	if err != nil {
+		return err
+	}
+	return s.store.SavePositions(ctx, userID, normalized)
 }
