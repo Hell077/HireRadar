@@ -23,6 +23,7 @@ type Config struct {
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
 	TelegramWebhookURL    string
+	OperatorAPIToken      string
 }
 
 // Load validates process configuration before opening external connections.
@@ -44,6 +45,7 @@ func Load() (Config, error) {
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
 		TelegramWebhookURL:    os.Getenv("TELEGRAM_WEBHOOK_URL"),
+		OperatorAPIToken:      os.Getenv("OPERATOR_API_TOKEN"),
 	}
 	cfg.TelegramBotUsername = strings.TrimPrefix(cfg.TelegramBotUsername, "@")
 	telegramValues := []string{cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret}
@@ -106,6 +108,9 @@ func Load() (Config, error) {
 		if cfg.S3Endpoint == "" || cfg.S3PublicEndpoint == "" || cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" {
 			return Config{}, fmt.Errorf("S3_ENDPOINT, S3_PUBLIC_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, and S3_SECRET_KEY are required in production")
 		}
+	}
+	if cfg.OperatorAPIToken != "" && len(cfg.OperatorAPIToken) < 32 {
+		return Config{}, fmt.Errorf("OPERATOR_API_TOKEN must contain at least 32 characters when configured")
 	}
 	return cfg, nil
 }

@@ -52,3 +52,57 @@ func TestSourceCatalogReportsLatestRunWithoutConfigOrError(t *testing.T) {
 		t.Fatalf("source %s missing from enabled catalog", id)
 	}
 }
+
+func TestSourceAdminSettingsReplayAndAudit(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL to a migrated PostgreSQL test database")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	id := "ops-" + uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO sources(id,name,source_type,company_name,enabled,priority,sync_interval_seconds,config) VALUES($1,'Ops test','greenhouse','Ops test',false,100,900,'{"board":"ops"}')`, id); err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM sources WHERE id=$1", id)
+	catalog := NewCatalog(pool)
+	if err := catalog.UpdateSettings(ctx, id, "operator", SourceSettings{Enabled: true, Priority: 20, SyncIntervalSeconds: 1800}); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.RequestSync(ctx, id, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	items, err := catalog.ListAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, item := range items {
+		if item.ID == id {
+			found = true
+			if !item.Enabled || item.Priority != 20 || item.SyncIntervalSecond != 1800 {
+				t.Fatalf("updated source=%+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("source %q absent from admin list", id)
+	}
+	events, err := catalog.ListAudit(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, event := range events {
+		if event.SourceID == id {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("audit events=%d want 2", count)
+	}
+}

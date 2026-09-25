@@ -20,12 +20,21 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("TELEGRAM_BOT_USERNAME", "")
 	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
 	t.Setenv("TELEGRAM_WEBHOOK_URL", "")
+	t.Setenv("OPERATOR_API_TOKEN", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Environment != "development" || cfg.Port != "8080" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
+	}
+}
+
+func TestLoadRejectsWeakOperatorToken(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("OPERATOR_API_TOKEN", "short")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OPERATOR_API_TOKEN") {
+		t.Fatalf("Load() error=%v, want weak operator token rejection", err)
 	}
 }
 

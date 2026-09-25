@@ -161,6 +161,18 @@ func TestMetricsExposeRequestCounters(t *testing.T) {
 	}
 }
 
+func TestAdminSourceOperationsRequireOperatorToken(t *testing.T) {
+	app := New(health.NewService(), AuthServices{OperatorAPIToken: "01234567890123456789012345678901"})
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/admin/sources", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d want 401", response.StatusCode)
+	}
+}
+
 func TestReadinessEndpointReportsDependencyFailure(t *testing.T) {
 	checker := health.NewService(health.Dependency{Name: "postgres", Pinger: failingPinger{}})
 	app := New(checker)

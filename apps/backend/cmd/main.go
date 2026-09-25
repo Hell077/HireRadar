@@ -78,7 +78,10 @@ func run() error {
 		services.Positions = profileService
 		services.Preferences = profileService
 		services.Sources = profileService
-		services.SourceCatalog = sourcepostgres.NewCatalog(client.Pool())
+		sourceCatalog := sourcepostgres.NewCatalog(client.Pool())
+		services.SourceCatalog = sourceCatalog
+		services.SourceOperations = sourceCatalog
+		services.OperatorAPIToken = cfg.OperatorAPIToken
 		services.Jobs = jobpostgres.NewCatalog(client.Pool())
 		services.Matches = matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
 		var telegramBot notificationapp.Bot
