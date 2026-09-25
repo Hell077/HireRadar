@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
@@ -89,6 +90,7 @@ func (s *Store) CandidateJobs(ctx context.Context, userID user.UserID, candidate
 		AND (cardinality($5::text[])=0 OR j.employment_types && $5::text[])
 		AND (j.published_at IS NULL OR j.published_at >= now()-($6::int*interval '1 day'))
 		AND (j.published_at IS NOT NULL OR j.first_seen_at >= now()-($6::int*interval '1 day'))
+		AND NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=$1 AND f.job_id=j.id AND f.feedback_type IN ('hidden','not_interested','applied'))
 		AND (NOT EXISTS(SELECT 1 FROM user_source_preferences usp WHERE usp.user_id=$1)
 		 OR EXISTS(SELECT 1 FROM job_sources js WHERE js.job_id=j.id AND js.is_active AND COALESCE((SELECT usp.enabled FROM user_source_preferences usp WHERE usp.user_id=$1 AND usp.source_id=js.source_id),true)))
 		ORDER BY j.created_at DESC,j.id DESC LIMIT 5000`
@@ -161,18 +163,29 @@ func (s *Store) Job(ctx context.Context, id string) (jobdomain.Job, error) {
 }
 
 func (s *Store) SaveJobMatch(ctx context.Context, userID user.UserID, result engine.Result) error {
-	if !result.Eligible {
-		if _, err := s.pool.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, string(userID), result.JobID); err != nil {
-			return fmt.Errorf("remove ineligible job match: %w", err)
-		}
-		return nil
-	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin job match save: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := upsertMatch(ctx, tx, userID, result); err != nil {
+	if err := lockUserJob(ctx, tx, userID, result.JobID); err != nil {
+		return err
+	}
+	if result.Eligible {
+		var dismissed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_feedback WHERE user_id=$1 AND job_id=$2 AND feedback_type IN ('hidden','not_interested','applied'))`, string(userID), result.JobID).Scan(&dismissed); err != nil {
+			return fmt.Errorf("check job feedback before matching: %w", err)
+		}
+		result.Eligible = !dismissed
+	}
+	if !result.Eligible {
+		if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, string(userID), result.JobID); err != nil {
+			return fmt.Errorf("cancel ineligible match notification: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, string(userID), result.JobID); err != nil {
+			return fmt.Errorf("remove ineligible job match: %w", err)
+		}
+	} else if err := upsertMatch(ctx, tx, userID, result); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -194,7 +207,12 @@ func (s *Store) SaveMatches(ctx context.Context, userID user.UserID, matches []e
 	if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND NOT(job_id=ANY($2::uuid[]))`, string(userID), ids); err != nil {
 		return fmt.Errorf("remove stale matches: %w", err)
 	}
-	for _, match := range matches {
+	if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND status='pending' AND NOT(job_id=ANY($2::uuid[]))`, string(userID), ids); err != nil {
+		return fmt.Errorf("cancel stale match notifications: %w", err)
+	}
+	orderedMatches := append([]engine.Result(nil), matches...)
+	sort.Slice(orderedMatches, func(i, j int) bool { return orderedMatches[i].JobID < orderedMatches[j].JobID })
+	for _, match := range orderedMatches {
 		if err := upsertMatch(ctx, tx, userID, match); err != nil {
 			return err
 		}
@@ -210,6 +228,22 @@ type matchExecer interface {
 }
 
 func upsertMatch(ctx context.Context, exec matchExecer, userID user.UserID, match engine.Result) error {
+	if err := lockUserJob(ctx, exec, userID, match.JobID); err != nil {
+		return err
+	}
+	var dismissed bool
+	if err := queryUserJobFeedback(ctx, exec, userID, match.JobID, &dismissed); err != nil {
+		return fmt.Errorf("check feedback before match save: %w", err)
+	}
+	if dismissed {
+		if _, err := exec.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, string(userID), match.JobID); err != nil {
+			return fmt.Errorf("cancel dismissed job notification: %w", err)
+		}
+		if _, err := exec.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, string(userID), match.JobID); err != nil {
+			return fmt.Errorf("remove dismissed job match: %w", err)
+		}
+		return nil
+	}
 	components, err := json.Marshal(match.Components)
 	if err != nil {
 		return fmt.Errorf("encode match explanation: %w", err)
@@ -232,8 +266,29 @@ func upsertMatch(ctx context.Context, exec matchExecer, userID user.UserID, matc
 	return nil
 }
 
+type matchQueryer interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func lockUserJob(ctx context.Context, exec matchExecer, userID user.UserID, jobID string) error {
+	if _, err := exec.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2,0))`, string(userID), jobID); err != nil {
+		return fmt.Errorf("lock user job match: %w", err)
+	}
+	return nil
+}
+
+func queryUserJobFeedback(ctx context.Context, exec matchExecer, userID user.UserID, jobID string, dismissed *bool) error {
+	queryer, ok := exec.(matchQueryer)
+	if !ok {
+		return fmt.Errorf("match transaction cannot query feedback")
+	}
+	return queryer.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_feedback WHERE user_id=$1 AND job_id=$2 AND feedback_type IN ('hidden','not_interested','applied'))`, string(userID), jobID).Scan(dismissed)
+}
+
 func (s *Store) ListMatches(ctx context.Context, userID user.UserID, limit int) ([]engine.Result, error) {
-	rows, err := s.pool.Query(ctx, `SELECT job_id::text,score,components::text FROM user_job_matches WHERE user_id=$1 ORDER BY score DESC,computed_at DESC,job_id LIMIT $2`, string(userID), limit)
+	rows, err := s.pool.Query(ctx, `SELECT m.job_id::text,m.score,m.components::text FROM user_job_matches m WHERE m.user_id=$1
+		AND NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=m.user_id AND f.job_id=m.job_id AND f.feedback_type IN ('hidden','not_interested','applied'))
+		ORDER BY m.score DESC,m.computed_at DESC,m.job_id LIMIT $2`, string(userID), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list candidate matches: %w", err)
 	}
