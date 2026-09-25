@@ -20,20 +20,22 @@ type healthOutput struct {
 }
 
 type AuthServices struct {
-	Registrar     Registrar
-	Sessions      Sessions
-	Email         EmailActions
-	Limiter       AuthLimiter
-	Profile       ProfileService
-	Skills        SkillService
-	Positions     PositionService
-	Preferences   PreferencesService
-	Sources       SourcePreferenceService
-	Resumes       ResumeService
-	SourceCatalog SourceCatalog
-	Jobs          JobCatalog
-	Matches       MatchService
-	Verifier      AccessVerifier
+	Registrar             Registrar
+	Sessions              Sessions
+	Email                 EmailActions
+	Limiter               AuthLimiter
+	Profile               ProfileService
+	Skills                SkillService
+	Positions             PositionService
+	Preferences           PreferencesService
+	Sources               SourcePreferenceService
+	Resumes               ResumeService
+	SourceCatalog         SourceCatalog
+	Jobs                  JobCatalog
+	Matches               MatchService
+	Telegram              TelegramService
+	TelegramWebhookSecret string
+	Verifier              AccessVerifier
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -101,6 +103,8 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.SourceCatalog = auth[0].SourceCatalog
 		services.Jobs = auth[0].Jobs
 		services.Matches = auth[0].Matches
+		services.Telegram = auth[0].Telegram
+		services.TelegramWebhookSecret = auth[0].TelegramWebhookSecret
 		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
@@ -115,6 +119,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerSources(api, services.SourceCatalog)
 	registerJobs(api, services.Jobs)
 	registerMatches(api, services.Matches, services.Verifier)
+	registerTelegram(api, services.Telegram, services.Verifier, services.TelegramWebhookSecret)
 
 	return app
 }

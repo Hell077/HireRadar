@@ -16,6 +16,9 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("S3_BUCKET", "")
 	t.Setenv("S3_ACCESS_KEY", "")
 	t.Setenv("S3_SECRET_KEY", "")
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Setenv("TELEGRAM_BOT_USERNAME", "")
+	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +38,9 @@ func TestLoadRejectsProductionWithoutDependencies(t *testing.T) {
 	t.Setenv("S3_BUCKET", "")
 	t.Setenv("S3_ACCESS_KEY", "")
 	t.Setenv("S3_SECRET_KEY", "")
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Setenv("TELEGRAM_BOT_USERNAME", "")
+	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
 		t.Fatalf("Load() error = %v, want missing DATABASE_URL", err)

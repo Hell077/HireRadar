@@ -7,16 +7,19 @@ import (
 )
 
 type Config struct {
-	Environment      string
-	Port             string
-	DatabaseURL      string
-	RedisURL         string
-	JWTPrivateKey    string
-	S3Endpoint       string
-	S3PublicEndpoint string
-	S3Bucket         string
-	S3AccessKey      string
-	S3SecretKey      string
+	Environment           string
+	Port                  string
+	DatabaseURL           string
+	RedisURL              string
+	JWTPrivateKey         string
+	S3Endpoint            string
+	S3PublicEndpoint      string
+	S3Bucket              string
+	S3AccessKey           string
+	S3SecretKey           string
+	TelegramBotToken      string
+	TelegramBotUsername   string
+	TelegramWebhookSecret string
 }
 
 // Load validates process configuration before opening external connections.
@@ -24,16 +27,29 @@ type Config struct {
 // readiness remains unavailable until both dependencies are configured.
 func Load() (Config, error) {
 	cfg := Config{
-		Environment:      os.Getenv("APP_ENV"),
-		Port:             os.Getenv("PORT"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		RedisURL:         os.Getenv("REDIS_URL"),
-		JWTPrivateKey:    os.Getenv("JWT_PRIVATE_KEY"),
-		S3Endpoint:       os.Getenv("S3_ENDPOINT"),
-		S3PublicEndpoint: os.Getenv("S3_PUBLIC_ENDPOINT"),
-		S3Bucket:         os.Getenv("S3_BUCKET"),
-		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
+		Environment:           os.Getenv("APP_ENV"),
+		Port:                  os.Getenv("PORT"),
+		DatabaseURL:           os.Getenv("DATABASE_URL"),
+		RedisURL:              os.Getenv("REDIS_URL"),
+		JWTPrivateKey:         os.Getenv("JWT_PRIVATE_KEY"),
+		S3Endpoint:            os.Getenv("S3_ENDPOINT"),
+		S3PublicEndpoint:      os.Getenv("S3_PUBLIC_ENDPOINT"),
+		S3Bucket:              os.Getenv("S3_BUCKET"),
+		S3AccessKey:           os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:           os.Getenv("S3_SECRET_KEY"),
+		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
+		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
+	}
+	telegramValues := []string{cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret}
+	configuredTelegram := 0
+	for _, value := range telegramValues {
+		if value != "" {
+			configuredTelegram++
+		}
+	}
+	if configuredTelegram != 0 && configuredTelegram != len(telegramValues) {
+		return Config{}, fmt.Errorf("TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, and TELEGRAM_WEBHOOK_SECRET must be configured together")
 	}
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
