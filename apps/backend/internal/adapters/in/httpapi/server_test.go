@@ -36,7 +36,7 @@ func (f fakeSourceCatalog) ListEnabled(context.Context) ([]sourcedomain.Source, 
 }
 
 func TestPublicSourceCatalog(t *testing.T) {
-	app := New(health.NewService(), AuthServices{SourceCatalog: fakeSourceCatalog{sources: []sourcedomain.Source{{ID: "acme", Name: "Acme", Type: sourcedomain.Greenhouse, CompanyName: "Acme", Enabled: true}}}})
+	app := New(health.NewService(), AuthServices{SourceCatalog: fakeSourceCatalog{sources: []sourcedomain.Source{{ID: "acme", Name: "Acme", Type: sourcedomain.Greenhouse, CompanyName: "Acme", Enabled: true, LastSyncStatus: "succeeded", LastFetchedJobs: 12}}}})
 	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/sources", nil))
 	if err != nil {
 		t.Fatal(err)
@@ -47,14 +47,16 @@ func TestPublicSourceCatalog(t *testing.T) {
 	}
 	var body struct {
 		Sources []struct {
-			ID   string `json:"id"`
-			Type string `json:"type"`
+			ID      string `json:"id"`
+			Type    string `json:"type"`
+			Status  string `json:"last_sync_status"`
+			Fetched int    `json:"last_fetched_jobs"`
 		} `json:"sources"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Sources) != 1 || body.Sources[0].ID != "acme" || body.Sources[0].Type != "greenhouse" {
+	if len(body.Sources) != 1 || body.Sources[0].ID != "acme" || body.Sources[0].Type != "greenhouse" || body.Sources[0].Status != "succeeded" || body.Sources[0].Fetched != 12 {
 		t.Fatalf("unexpected source response: %+v", body)
 	}
 }

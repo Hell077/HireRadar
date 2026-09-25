@@ -28,6 +28,11 @@ type Source struct {
 	Config             json.RawMessage `json:"-"`
 	Cursor             json.RawMessage `json:"-"`
 	LastSyncAt         *time.Time      `json:"last_sync_at"`
+	LastAttemptAt      *time.Time      `json:"last_attempt_at"`
+	LastSyncStatus     string          `json:"last_sync_status,omitempty"`
+	LastFetchedJobs    int             `json:"last_fetched_jobs"`
+	LastNewJobs        int             `json:"last_new_jobs"`
+	LastUpdatedJobs    int             `json:"last_updated_jobs"`
 }
 
 type ExternalJob struct {
