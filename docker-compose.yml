@@ -16,7 +16,12 @@ x-backend-env: &backend-env
   TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
   TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
   TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
-  OPERATOR_API_TOKEN: ${OPERATOR_API_TOKEN:-}
+  OPERATOR_API_TOKEN: ${OPERATOR_API_TOKEN:?Set OPERATOR_API_TOKEN in .env}
+  SMTP_ADDRESS: mailpit:1025
+  SMTP_FROM: ${SMTP_FROM:-auth@hireradar.local}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 services:
@@ -113,69 +118,14 @@ services:
         condition: service_healthy
       rustfs-init:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/ready"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 15s
-    restart: unless-stopped
-
-  email-worker:
-    image: hireradar-backend:local
-    entrypoint: ["/app/email-worker"]
-    environment:
-      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      SMTP_ADDRESS: mailpit:1025
-      SMTP_FROM: auth@hireradar.local
-      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
-    depends_on:
-      api:
-        condition: service_healthy
-      mailpit:
-        condition: service_started
-    restart: unless-stopped
-
-  resume-worker:
-    image: hireradar-backend:local
-    entrypoint: ["/app/resume-worker"]
-    environment: *backend-env
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-
-  source-worker:
-    image: hireradar-backend:local
-    entrypoint: ["/app/source-worker"]
-    environment:
-      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-
-  matching-worker:
-    image: hireradar-backend:local
-    entrypoint: ["/app/matching-worker"]
-    environment:
-      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-
-  notification-worker:
-    image: hireradar-backend:local
-    entrypoint: ["/app/notification-worker"]
-    profiles: ["telegram"]
-    environment:
-      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-    depends_on:
-      api:
-        condition: service_healthy
     restart: unless-stopped
 
 volumes:
