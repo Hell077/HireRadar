@@ -15,6 +15,7 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/password"
 	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/postgres"
 	rediscache "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/redis"
+	s3storage "github.com/Hell077/HireRadar/apps/backend/internal/adapters/outbound/s3"
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	authpostgres "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/postgres"
 	authredis "github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/redis"
@@ -23,6 +24,8 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
 	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
+	resumepostgres "github.com/Hell077/HireRadar/apps/backend/internal/resume/adapters/postgres"
+	resumeapp "github.com/Hell077/HireRadar/apps/backend/internal/resume/application"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -68,6 +71,13 @@ func run() error {
 		services.Positions = profileService
 		services.Preferences = profileService
 		services.Sources = profileService
+		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
+			storage, err := s3storage.New(ctx, cfg)
+			if err != nil {
+				return fmt.Errorf("configure resume storage: %w", err)
+			}
+			services.Resumes = resumeapp.NewService(resumepostgres.NewStore(client.Pool()), storage, time.Now)
+		}
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
 			if err != nil {
