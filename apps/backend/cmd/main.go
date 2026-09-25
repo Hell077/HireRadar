@@ -65,6 +65,7 @@ func run() error {
 		profileService := profileapp.NewService(profilepostgres.NewStore(client.Pool()))
 		services.Profile = profileService
 		services.Skills = profileService
+		services.Positions = profileService
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
 			if err != nil {

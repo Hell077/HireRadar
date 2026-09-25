@@ -26,6 +26,7 @@ type AuthServices struct {
 	Limiter   AuthLimiter
 	Profile   ProfileService
 	Skills    SkillService
+	Positions PositionService
 	Verifier  AccessVerifier
 }
 
@@ -87,6 +88,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		}
 		services.Profile = auth[0].Profile
 		services.Skills = auth[0].Skills
+		services.Positions = auth[0].Positions
 		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
@@ -94,6 +96,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerEmail(api, services.Email)
 	registerProfile(api, services.Profile, services.Verifier)
 	registerSkills(api, services.Skills, services.Verifier)
+	registerPositions(api, services.Positions, services.Verifier)
 
 	return app
 }
