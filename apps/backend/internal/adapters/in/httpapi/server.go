@@ -32,6 +32,7 @@ type AuthServices struct {
 	Resumes       ResumeService
 	SourceCatalog SourceCatalog
 	Jobs          JobCatalog
+	Matches       MatchService
 	Verifier      AccessVerifier
 }
 
@@ -99,6 +100,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.Resumes = auth[0].Resumes
 		services.SourceCatalog = auth[0].SourceCatalog
 		services.Jobs = auth[0].Jobs
+		services.Matches = auth[0].Matches
 		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
@@ -112,6 +114,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerResumes(api, services.Resumes, services.Verifier)
 	registerSources(api, services.SourceCatalog)
 	registerJobs(api, services.Jobs)
+	registerMatches(api, services.Matches, services.Verifier)
 
 	return app
 }

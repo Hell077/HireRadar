@@ -12,6 +12,7 @@ import (
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
+	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
@@ -58,6 +59,42 @@ func TestPublicSourceCatalog(t *testing.T) {
 	}
 	if len(body.Sources) != 1 || body.Sources[0].ID != "acme" || body.Sources[0].Type != "greenhouse" || body.Sources[0].Status != "succeeded" || body.Sources[0].Fetched != 12 {
 		t.Fatalf("unexpected source response: %+v", body)
+	}
+}
+
+type fakeMatchService struct{ refreshed int }
+
+func (f *fakeMatchService) Refresh(context.Context, userdomain.UserID) ([]engine.Result, error) {
+	f.refreshed++
+	return []engine.Result{{JobID: "job-id", Score: 88, Eligible: true}}, nil
+}
+func (f *fakeMatchService) List(_ context.Context, _ userdomain.UserID, _ int) ([]engine.Result, error) {
+	return []engine.Result{{JobID: "job-id", Score: 88, Eligible: true}}, nil
+}
+
+func TestMatchEndpointsRequireAuthentication(t *testing.T) {
+	service := &fakeMatchService{}
+	app := New(health.NewService(), AuthServices{Matches: service, Verifier: fakeVerifier{}})
+	for _, test := range []struct{ method, path string }{{http.MethodGet, "/api/v1/matches"}, {http.MethodPost, "/api/v1/matches/refresh"}} {
+		req := httptest.NewRequest(test.method, test.path, nil)
+		response, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%s %s without token returned %d", test.method, test.path, response.StatusCode)
+		}
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/matches/refresh", nil)
+	request.Header.Set("Authorization", "Bearer valid")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK || service.refreshed != 1 {
+		t.Fatalf("refresh status=%d calls=%d", response.StatusCode, service.refreshed)
 	}
 }
 

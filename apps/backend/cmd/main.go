@@ -23,6 +23,8 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
 	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
+	matchpostgres "github.com/Hell077/HireRadar/apps/backend/internal/matching/adapters/postgres"
+	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
 	resumepostgres "github.com/Hell077/HireRadar/apps/backend/internal/resume/adapters/postgres"
@@ -75,6 +77,7 @@ func run() error {
 		services.Sources = profileService
 		services.SourceCatalog = sourcepostgres.NewCatalog(client.Pool())
 		services.Jobs = jobpostgres.NewCatalog(client.Pool())
+		services.Matches = matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
 		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
 			storage, err := s3storage.New(ctx, cfg)
 			if err != nil {

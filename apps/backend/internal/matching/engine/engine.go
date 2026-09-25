@@ -64,6 +64,9 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 	if len(candidate.Preferences.EmploymentTypes) > 0 && !intersectsNormalized(job.EmploymentTypes, candidate.Preferences.EmploymentTypes) {
 		exclude("employment_type_mismatch")
 	}
+	if minimum := candidate.Preferences.MinimumSalary; minimum != nil && job.Salary != nil && job.Salary.Currency == minimum.Currency && job.Salary.Period == "year" && job.Salary.Maximum < float64(minimum.Amount) {
+		exclude("salary_below_minimum")
+	}
 	if candidate.Preferences.MaximumJobAgeDays > 0 {
 		date := job.FirstSeenAt
 		if job.PublishedAt != nil {
