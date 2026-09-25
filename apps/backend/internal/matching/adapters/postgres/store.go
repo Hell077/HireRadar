@@ -115,6 +115,67 @@ func (s *Store) CandidateJobs(ctx context.Context, userID user.UserID, candidate
 	return jobs, rows.Err()
 }
 
+func (s *Store) CandidateIDs(ctx context.Context) ([]user.UserID, error) {
+	rows, err := s.pool.Query(ctx, `SELECT u.id::text FROM users u WHERE u.status='active' AND (
+		EXISTS(SELECT 1 FROM user_profiles p WHERE p.user_id=u.id)
+		OR EXISTS(SELECT 1 FROM user_skills us WHERE us.user_id=u.id)
+		OR EXISTS(SELECT 1 FROM user_positions up WHERE up.user_id=u.id)
+		OR EXISTS(SELECT 1 FROM job_preferences jp WHERE jp.user_id=u.id)) ORDER BY u.id`)
+	if err != nil {
+		return nil, fmt.Errorf("list candidate accounts: %w", err)
+	}
+	defer rows.Close()
+	ids := []user.UserID{}
+	for rows.Next() {
+		var id user.UserID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (s *Store) Job(ctx context.Context, id string) (jobdomain.Job, error) {
+	var job jobdomain.Job
+	var skillsJSON []byte
+	var minimum, maximum *float64
+	var currency, period *string
+	err := s.pool.QueryRow(ctx, `SELECT j.id::text,j.company_id::text,c.name,j.title,j.normalized_title,j.seniority,j.description,
+		j.salary_min,j.salary_max,j.salary_currency,j.salary_period,j.employment_types,
+		COALESCE((SELECT jsonb_agg(jsonb_build_object('id',sk.id::text,'name',sk.name,'required',js.required,'confidence',js.confidence)) FROM job_skills js JOIN skills sk ON sk.id=js.skill_id WHERE js.job_id=j.id),'[]'::jsonb)::text,
+		j.remote_policy,j.location,j.location_countries,j.eligibility,j.apply_url,j.published_at,j.first_seen_at,j.last_seen_at,j.status,j.source_priority,j.created_at,j.updated_at
+		FROM jobs j JOIN companies c ON c.id=j.company_id WHERE j.id=$1`, id).Scan(&job.ID, &job.CompanyID, &job.Company, &job.Title, &job.NormalizedTitle, &job.Seniority, &job.Description, &minimum, &maximum, &currency, &period, &job.EmploymentTypes, &skillsJSON, &job.RemotePolicy, &job.Location, &job.Countries, &job.Eligibility, &job.ApplyURL, &job.PublishedAt, &job.FirstSeenAt, &job.LastSeenAt, &job.Status, &job.SourcePriority, &job.CreatedAt, &job.UpdatedAt)
+	if err != nil {
+		return jobdomain.Job{}, fmt.Errorf("load job for rematching: %w", err)
+	}
+	if minimum != nil && maximum != nil && currency != nil && period != nil {
+		job.Salary = &jobdomain.SalaryRange{Minimum: *minimum, Maximum: *maximum, Currency: *currency, Period: *period}
+	}
+	if err := json.Unmarshal(skillsJSON, &job.Skills); err != nil {
+		return jobdomain.Job{}, fmt.Errorf("decode rematching job skills: %w", err)
+	}
+	return job, nil
+}
+
+func (s *Store) SaveJobMatch(ctx context.Context, userID user.UserID, result engine.Result) error {
+	if !result.Eligible {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, string(userID), result.JobID); err != nil {
+			return fmt.Errorf("remove ineligible job match: %w", err)
+		}
+		return nil
+	}
+	components, err := json.Marshal(result.Components)
+	if err != nil {
+		return fmt.Errorf("encode job match explanation: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,$3,$4::jsonb)
+		ON CONFLICT(user_id,job_id) DO UPDATE SET score=EXCLUDED.score,components=EXCLUDED.components,computed_at=now()`, string(userID), result.JobID, result.Score, components); err != nil {
+		return fmt.Errorf("save job match: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) SaveMatches(ctx context.Context, userID user.UserID, matches []engine.Result) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

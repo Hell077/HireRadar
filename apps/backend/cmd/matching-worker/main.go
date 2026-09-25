@@ -39,6 +39,8 @@ func run() error {
 	worker := matchpostgres.NewOutboxWorker(database.Pool(), func(ctx context.Context, id user.UserID) error {
 		_, err := service.Refresh(ctx, id)
 		return err
+	}, func(ctx context.Context, jobID string) error {
+		return service.RefreshJob(ctx, jobID)
 	})
 	slog.Info("matching worker started")
 	for ctx.Err() == nil {

@@ -61,6 +61,12 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 	if len(candidate.Preferences.RemotePolicies) > 0 && !contains(candidate.Preferences.RemotePolicies, string(job.RemotePolicy)) {
 		exclude("remote_policy_mismatch")
 	}
+	if len(candidate.Preferences.AllowedRegions) > 0 {
+		regions := jobRegions(job)
+		if len(regions) > 0 && !intersects(regions, candidate.Preferences.AllowedRegions) {
+			exclude("region_mismatch")
+		}
+	}
 	if len(candidate.Preferences.EmploymentTypes) > 0 && !intersectsNormalized(job.EmploymentTypes, candidate.Preferences.EmploymentTypes) {
 		exclude("employment_type_mismatch")
 	}
@@ -101,6 +107,64 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 		result.Exclusions = append(result.Exclusions, "below_minimum_match_score")
 	}
 	return result
+}
+
+func jobRegions(job jobdomain.Job) []string {
+	regions := []string{}
+	add := func(value string) {
+		if value != "" && !contains(regions, value) {
+			regions = append(regions, value)
+		}
+	}
+	location := strings.ToLower(job.Location)
+	for _, region := range []string{"emea", "latam", "apac", "mena", "americas", "europe", "africa", "asia_pacific", "latin_america"} {
+		needle := strings.ReplaceAll(region, "_", " ")
+		if strings.Contains(location, needle) {
+			add(region)
+			if region == "asia_pacific" {
+				add("apac")
+			}
+			if region == "latin_america" {
+				add("latam")
+			}
+		}
+	}
+	for _, country := range job.Countries {
+		switch country {
+		case "US", "CA":
+			add("north_america")
+			add("americas")
+		case "MX", "BR", "AR", "CL", "CO", "PE", "CR", "UY", "DO":
+			add("latin_america")
+			add("latam")
+			add("americas")
+		case "GB", "IE", "DE", "FR", "NL", "ES", "PT", "IT", "CH", "AT", "BE", "SE", "NO", "DK", "FI", "PL", "CZ", "RO", "GR", "UA":
+			add("europe")
+			add("emea")
+		case "AE", "SA", "IL", "TR", "EG":
+			add("middle_east")
+			add("mena")
+			add("emea")
+		case "ZA", "NG", "KE":
+			add("africa")
+			add("emea")
+		case "IN", "PK", "BD":
+			add("south_asia")
+			add("apac")
+		case "SG", "MY", "ID", "PH", "TH", "VN":
+			add("southeast_asia")
+			add("apac")
+		case "JP", "KR", "CN", "TW":
+			add("east_asia")
+			add("apac")
+		case "AU", "NZ":
+			add("oceania")
+			add("apac")
+		case "KZ", "KG", "UZ", "TJ", "TM":
+			add("central_asia")
+		}
+	}
+	return regions
 }
 
 func (w Weights) Valid() bool {

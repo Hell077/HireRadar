@@ -99,6 +99,8 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	worker := NewOutboxWorker(pool, func(ctx context.Context, id user.UserID) error {
 		_, err := service.Refresh(ctx, id)
 		return err
+	}, func(ctx context.Context, id string) error {
+		return service.RefreshJob(ctx, id)
 	})
 	found, err := worker.ProcessEvent(ctx, eventID)
 	if err != nil || !found {
@@ -112,11 +114,41 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if err != nil || found {
 		t.Fatalf("duplicate event processing found=%v err=%v", found, err)
 	}
+	if err := NewStore(pool).SaveMatches(ctx, user.UserID(userID), []engine.Result{}); err != nil {
+		t.Fatal(err)
+	}
+	jobEventID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'job.created','job',$2,jsonb_build_object('job_id',$2::text))`, jobEventID, goodID); err != nil {
+		t.Fatal(err)
+	}
+	found, err = worker.ProcessEvent(ctx, jobEventID)
+	if err != nil || !found {
+		t.Fatalf("process new job event found=%v err=%v", found, err)
+	}
+	listed, err = service.List(ctx, user.UserID(userID), 100)
+	if err != nil || len(listed) != 1 || listed[0].JobID != goodID {
+		t.Fatalf("job event did not fan out to candidate: %+v err=%v", listed, err)
+	}
+	closedEventID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET status='closed' WHERE id=$1`, goodID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'job.closed','job',$2,jsonb_build_object('job_id',$2::text))`, closedEventID, goodID); err != nil {
+		t.Fatal(err)
+	}
+	found, err = worker.ProcessEvent(ctx, closedEventID)
+	if err != nil || !found {
+		t.Fatalf("process closed job event found=%v err=%v", found, err)
+	}
+	listed, err = service.List(ctx, user.UserID(userID), 100)
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("closed job match was not removed: %+v err=%v", listed, err)
+	}
 	retryEventID := uuid.NewString()
 	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'profile.changed','user',$2,jsonb_build_object('user_id',$2::text))`, retryEventID, userID); err != nil {
 		t.Fatal(err)
 	}
-	failingWorker := NewOutboxWorker(pool, func(context.Context, user.UserID) error { return errors.New("temporary matching failure") })
+	failingWorker := NewOutboxWorker(pool, func(context.Context, user.UserID) error { return errors.New("temporary matching failure") }, nil)
 	found, err = failingWorker.ProcessEvent(ctx, retryEventID)
 	if !found || err == nil {
 		t.Fatalf("failed refresh found=%v err=%v", found, err)

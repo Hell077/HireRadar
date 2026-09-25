@@ -59,3 +59,24 @@ func TestWeightsAreValidatedAndConfigurable(t *testing.T) {
 		t.Fatalf("custom weights were not applied: %+v", got)
 	}
 }
+
+func TestAllowedRegionHardFilterUsesCountryAndRegionAliases(t *testing.T) {
+	now := time.Now().UTC()
+	job := jobdomain.Job{ID: "region", Title: "Engineer", Status: jobdomain.Active, Countries: []string{"DE"}, Location: "Berlin, Germany", Eligibility: jobdomain.NotEligible, FirstSeenAt: now}
+	candidate := Candidate{Profile: profiledomain.Profile{Country: "KZ"}, Preferences: profiledomain.Preferences{AllowedRegions: []string{"apac"}, MaximumJobAgeDays: 30}}
+	got := Evaluate(candidate, job, now)
+	if got.Eligible || len(got.Exclusions) == 0 || got.Exclusions[0] != "country_not_eligible" {
+		t.Fatalf("hard eligibility should run before region scoring: %+v", got)
+	}
+	job.Eligibility = jobdomain.EligibilityUnknown
+	candidate.Profile.Country = ""
+	got = Evaluate(candidate, job, now)
+	if got.Eligible || !contains(got.Exclusions, "region_mismatch") || len(got.Components) != 0 {
+		t.Fatalf("explicitly disallowed region was scored: %+v", got)
+	}
+	candidate.Preferences.AllowedRegions = []string{"emea"}
+	got = Evaluate(candidate, job, now)
+	if !got.Eligible {
+		t.Fatalf("EMEA alias did not accept a European country: %+v", got)
+	}
+}
