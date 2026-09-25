@@ -238,3 +238,42 @@ func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, ac
 	}
 	return nil
 }
+
+func (s *Store) ApplyUserAction(ctx context.Context, userID user.UserID, jobID, action string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin user job feedback: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	userIDString := string(userID)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2,0))`, userIDString, jobID); err != nil {
+		return fmt.Errorf("lock user job feedback: %w", err)
+	}
+	var ownsMatch bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_matches WHERE user_id=$1 AND job_id=$2)`, userIDString, jobID).Scan(&ownsMatch); err != nil {
+		return fmt.Errorf("verify user match ownership: %w", err)
+	}
+	if !ownsMatch {
+		return application.ErrFeedbackNotOwned
+	}
+	feedbackType := "hidden"
+	if action == "applied" {
+		feedbackType = "applied"
+	} else if action != "hide" {
+		return application.ErrInvalidCallback
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type) VALUES($1,$2,$3,$4)
+		ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET created_at=now()`, uuid.NewString(), userIDString, jobID, feedbackType); err != nil {
+		return fmt.Errorf("save user job feedback: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, userIDString, jobID); err != nil {
+		return fmt.Errorf("cancel feedback notification: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userIDString, jobID); err != nil {
+		return fmt.Errorf("remove dismissed match: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit user job feedback: %w", err)
+	}
+	return nil
+}

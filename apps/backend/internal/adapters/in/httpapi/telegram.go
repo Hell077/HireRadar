@@ -20,6 +20,7 @@ type TelegramService interface {
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
 	SavedJobs(context.Context, user.UserID, int) ([]application.SavedJob, error)
 	RemoveSavedJob(context.Context, user.UserID, string) error
+	ApplyUserAction(context.Context, user.UserID, string, string) error
 	HandleStart(context.Context, int64, int64, string, string) error
 	HandleCallback(context.Context, int64, string, string) error
 }
@@ -66,6 +67,13 @@ type savedJobDeleteInput struct {
 	Authorization string `header:"Authorization" required:"false"`
 	ID            string `path:"id"`
 }
+type jobFeedbackInput struct {
+	Authorization string `header:"Authorization" required:"false"`
+	ID            string `path:"id"`
+	Body          struct {
+		Action string `json:"action" enum:"hide,applied"`
+	}
+}
 type savedJobsOutput struct {
 	Body struct {
 		Items []application.SavedJob `json:"items"`
@@ -97,6 +105,27 @@ type telegramWebhookInput struct {
 }
 
 func registerTelegram(api huma.API, service TelegramService, verifier AccessVerifier, webhookSecret string) {
+	huma.Register(api, huma.Operation{OperationID: "job-feedback", Method: "POST", Path: "/api/v1/jobs/{id}/feedback", Summary: "Hide a job or mark it as applied"}, func(ctx context.Context, input *jobFeedbackInput) (*telegramOKOutput, error) {
+		if service == nil {
+			return nil, huma.Error503ServiceUnavailable("job feedback unavailable")
+		}
+		id, err := profileUser(input.Authorization, verifier)
+		if err != nil {
+			return nil, err
+		}
+		if err := service.ApplyUserAction(ctx, id, input.ID, input.Body.Action); err != nil {
+			if errors.Is(err, application.ErrFeedbackNotOwned) {
+				return nil, huma.Error404NotFound("job match not found")
+			}
+			if errors.Is(err, application.ErrInvalidCallback) {
+				return nil, huma.Error400BadRequest("invalid job feedback")
+			}
+			return nil, huma.Error500InternalServerError("job feedback failed")
+		}
+		out := &telegramOKOutput{}
+		out.Body.Status = "updated"
+		return out, nil
+	})
 	huma.Register(api, huma.Operation{OperationID: "saved-jobs-list", Method: "GET", Path: "/api/v1/saved-jobs", Summary: "List saved jobs"}, func(ctx context.Context, input *savedJobsInput) (*savedJobsOutput, error) {
 		if service == nil {
 			return nil, huma.Error503ServiceUnavailable("saved jobs unavailable")

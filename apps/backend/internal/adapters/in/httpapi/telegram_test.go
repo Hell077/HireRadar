@@ -33,6 +33,9 @@ func (f *fakeTelegramService) SavedJobs(context.Context, user.UserID, int) ([]ap
 	return nil, nil
 }
 func (f *fakeTelegramService) RemoveSavedJob(context.Context, user.UserID, string) error { return nil }
+func (f *fakeTelegramService) ApplyUserAction(context.Context, user.UserID, string, string) error {
+	return nil
+}
 func (f *fakeTelegramService) HandleStart(context.Context, int64, int64, string, string) error {
 	f.started++
 	return nil
@@ -57,6 +60,20 @@ func TestTelegramLinkRequiresAuthentication(t *testing.T) {
 func TestSavedJobsRequireAuthentication(t *testing.T) {
 	app := New(health.NewService(), AuthServices{Telegram: &fakeTelegramService{}, Verifier: fakeVerifier{}})
 	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/saved-jobs", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", response.StatusCode)
+	}
+}
+
+func TestJobFeedbackRequiresAuthentication(t *testing.T) {
+	app := New(health.NewService(), AuthServices{Telegram: &fakeTelegramService{}, Verifier: fakeVerifier{}})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/b2d45992-9a64-42f3-92a8-b511562184d2/feedback", strings.NewReader(`{"action":"applied"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
 	if err != nil {
 		t.Fatal(err)
 	}

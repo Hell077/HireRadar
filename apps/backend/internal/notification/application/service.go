@@ -56,6 +56,7 @@ type Store interface {
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
 	ListSavedJobs(context.Context, user.UserID, int) ([]SavedJob, error)
 	RemoveSavedJob(context.Context, user.UserID, string) error
+	ApplyUserAction(context.Context, user.UserID, string, string) error
 	ApplyAction(context.Context, int64, string, string) error
 }
 
@@ -183,6 +184,13 @@ func (s *Service) RemoveSavedJob(ctx context.Context, userID user.UserID, jobID 
 		return errors.New("invalid job ID")
 	}
 	return s.store.RemoveSavedJob(ctx, userID, jobID)
+}
+
+func (s *Service) ApplyUserAction(ctx context.Context, userID user.UserID, jobID, action string) error {
+	if uuid.Validate(jobID) != nil || (action != "hide" && action != "applied") {
+		return ErrInvalidCallback
+	}
+	return s.store.ApplyUserAction(ctx, userID, jobID, action)
 }
 
 func (s *Service) Disconnect(ctx context.Context, userID user.UserID) error {
