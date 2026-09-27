@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { FileText, Pencil, Plus, Upload, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -30,6 +31,7 @@ import {
 
 import { updateProfile, updateSkills } from "@/app/profile-actions";
 import type { CandidateProfile, CandidateSkill } from "@/lib/api/server";
+import { completeResumeUpload, createResumeUpload } from "@/app/resume-actions";
 
 function Field({
   label,
@@ -224,6 +226,40 @@ export function EditSkillsSheet({
 
 export function ReplaceResumeDialog() {
   const t = useTranslations("profileEditor");
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function upload() {
+    if (
+      !file ||
+      file.type !== "application/pdf" ||
+      file.size > 10 * 1024 * 1024
+    ) {
+      setError(true);
+      return;
+    }
+    setUploading(true);
+    setError(false);
+    try {
+      const result = await createResumeUpload(file.name, file.size);
+      if (!result) throw new Error("upload URL unavailable");
+      const response = await fetch(result.upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/pdf" },
+        body: file,
+      });
+      if (!response.ok || !(await completeResumeUpload(result.resume.id))) {
+        throw new Error("upload failed");
+      }
+      router.refresh();
+    } catch {
+      setError(true);
+    } finally {
+      setUploading(false);
+    }
+  }
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -238,24 +274,34 @@ export function ReplaceResumeDialog() {
           <DialogDescription>{t("resumeDescription")}</DialogDescription>
         </DialogHeader>
         <label className="flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-secondary/40 p-6 text-center hover:bg-accent/50">
-          <input className="sr-only" type="file" accept=".pdf,.doc,.docx" />
+          <input
+            className="sr-only"
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={(event) =>
+              setFile(event.currentTarget.files?.[0] ?? null)
+            }
+          />
           <span className="grid size-11 place-items-center rounded-xl bg-card text-primary shadow-sm">
             <FileText className="size-5" aria-hidden="true" />
           </span>
           <span className="mt-4 text-sm font-semibold">
-            {t("chooseResume")}
+            {file?.name ?? t("chooseResume")}
           </span>
           <span className="mt-1 text-xs text-muted-foreground">
             {t("fileHelp")}
           </span>
         </label>
+        {error ? (
+          <p className="text-sm text-destructive">{t("uploadError")}</p>
+        ) : null}
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline">{t("cancel")}</Button>
           </DialogClose>
-          <DialogClose asChild>
-            <Button>{t("upload")}</Button>
-          </DialogClose>
+          <Button type="button" onClick={upload} disabled={!file || uploading}>
+            {uploading ? t("uploading") : t("upload")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

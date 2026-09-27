@@ -9,7 +9,7 @@ import { JobCard } from "@/components/jobs/job-card";
 import { StatusState } from "@/components/feedback/status-state";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
-import { jobs } from "@/lib/jobs";
+import { getSavedJobs } from "@/lib/jobs";
 
 export default async function SavedJobsPage({
   searchParams,
@@ -17,8 +17,9 @@ export default async function SavedJobsPage({
   searchParams: Promise<{ empty?: string }>;
 }) {
   const t = await getTranslations("saved");
-  const empty = (await searchParams).empty === "1";
-  const savedJobs = empty ? [] : jobs.slice(0, 2);
+  const params = await searchParams;
+  const savedJobs = await getSavedJobs();
+  const empty = params.empty === "1" || savedJobs.length === 0;
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -55,7 +56,7 @@ export default async function SavedJobsPage({
           ) : (
             savedJobs.map((job, index) => (
               <Reveal key={job.id} delay={0.06 + index * 0.05}>
-                <JobCard job={job} />
+                <JobCard job={job} saved />
               </Reveal>
             ))
           )}

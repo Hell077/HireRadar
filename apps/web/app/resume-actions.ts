@@ -1,5 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
 import type { components } from "@/lib/api/generated";
 import { authenticatedRequest } from "@/lib/api/server";
 
@@ -35,18 +38,37 @@ export async function completeResumeUpload(id: string) {
 }
 
 export async function getLatestResumeAnalysis() {
-  const listResponse = await authenticatedRequest("/api/v1/resumes", {}, true).catch(() => null);
+  const listResponse = await authenticatedRequest("/api/v1/resumes", {}).catch(
+    () => null,
+  );
   if (!listResponse?.ok) return null;
-  const list = (await listResponse.json()) as { resumes: components["schemas"]["Resume"][] | null };
-  const resume = [...(list.resumes ?? [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  const list = (await listResponse.json()) as {
+    resumes: components["schemas"]["Resume"][] | null;
+  };
+  const resume = [...(list.resumes ?? [])].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  )[0];
   if (!resume) return null;
-  const response = await authenticatedRequest(`/api/v1/resumes/${encodeURIComponent(resume.id)}/analysis`, {}, true).catch(() => null);
-  if (!response?.ok) return { resume, analysis: null, suggestions: [] as ResumeSuggestion[] };
-  const body = (await response.json()) as components["schemas"]["ResumeAnalysisOutputBody"];
-  return { resume, analysis: body.analysis, suggestions: body.suggestions ?? [] };
+  const response = await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(resume.id)}/analysis`,
+    {},
+  ).catch(() => null);
+  if (!response?.ok)
+    return { resume, analysis: null, suggestions: [] as ResumeSuggestion[] };
+  const body =
+    (await response.json()) as components["schemas"]["ResumeAnalysisOutputBody"];
+  return {
+    resume,
+    analysis: body.analysis,
+    suggestions: body.suggestions ?? [],
+  };
 }
 
-export async function reviewResumeSuggestion(resumeID: string, suggestionID: string, accept: boolean) {
+export async function reviewResumeSuggestion(
+  resumeID: string,
+  suggestionID: string,
+  accept: boolean,
+) {
   const action = accept ? "accept" : "reject";
   const response = await authenticatedRequest(
     `/api/v1/resumes/${encodeURIComponent(resumeID)}/suggestions/${encodeURIComponent(suggestionID)}/${action}`,
@@ -54,4 +76,29 @@ export async function reviewResumeSuggestion(resumeID: string, suggestionID: str
     true,
   ).catch(() => null);
   return Boolean(response?.ok);
+}
+
+export async function downloadResume(formData: FormData) {
+  const id = String(formData.get("resumeId") ?? "");
+  const response = await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(id)}`,
+    {},
+    true,
+  ).catch(() => null);
+  if (!response?.ok) redirect("/?resumeError=1");
+  const body =
+    (await response.json()) as components["schemas"]["ResumeDownloadOutputBody"];
+  if (!body.download_url) redirect("/?resumeError=1");
+  redirect(body.download_url);
+}
+
+export async function deleteResume(formData: FormData) {
+  const id = String(formData.get("resumeId") ?? "");
+  const response = await authenticatedRequest(
+    `/api/v1/resumes/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+    true,
+  ).catch(() => null);
+  revalidatePath("/");
+  redirect(response?.ok ? "/?resumeDeleted=1" : "/?resumeError=1");
 }

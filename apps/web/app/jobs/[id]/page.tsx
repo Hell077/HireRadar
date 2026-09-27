@@ -16,11 +16,8 @@ import { Button } from "@repo/ui/components/button";
 import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
-import { getJob, jobs } from "@/lib/jobs";
-
-export function generateStaticParams() {
-  return jobs.map((job) => ({ id: job.id }));
-}
+import { markJobApplied } from "@/app/job-actions";
+import { getJob } from "@/lib/jobs";
 
 export default async function JobDetailsPage({
   params,
@@ -28,7 +25,7 @@ export default async function JobDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const job = getJob(id);
+  const job = await getJob(id);
   if (!job) notFound();
   const t = await getTranslations("jobs");
 
@@ -76,14 +73,24 @@ export default async function JobDetailsPage({
                   <span>{t("via", { source: job.source })}</span>
                 </div>
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <Button size="lg">
-                    {t("apply")}
-                    <ExternalLink aria-hidden="true" />
+                  <Button asChild size="lg">
+                    <a href={job.applyUrl} target="_blank" rel="noreferrer">
+                      {t("apply")}
+                      <ExternalLink aria-hidden="true" />
+                    </a>
                   </Button>
-                  <Button variant="outline" size="lg">
-                    <Bookmark aria-hidden="true" />
-                    {t("save")}
-                  </Button>
+                  <form action={markJobApplied}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input
+                      type="hidden"
+                      name="returnTo"
+                      value={`/jobs/${job.id}`}
+                    />
+                    <Button variant="outline" size="lg" type="submit">
+                      <Bookmark aria-hidden="true" />
+                      {t("markApplied")}
+                    </Button>
+                  </form>
                 </div>
               </div>
             </div>
@@ -96,7 +103,7 @@ export default async function JobDetailsPage({
               <section>
                 <h2 className="text-lg font-semibold">{t("aboutRole")}</h2>
                 <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                  {job.summary} {t("descriptionBody")}
+                  {job.description}
                 </p>
               </section>
               <section>

@@ -1,4 +1,106 @@
 export interface paths {
+    "/api/v1/admin/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read background service status */
+        get: operations["admin-services-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/services/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start, stop or restart a background service */
+        post: operations["admin-service-action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all sources and sync health */
+        get: operations["admin-sources-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sources/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read source operator audit trail */
+        get: operations["admin-source-audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update source polling settings */
+        put: operations["admin-source-settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sources/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schedule a source sync */
+        post: operations["admin-source-sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -129,6 +231,97 @@ export interface paths {
         get: operations["health-check"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List normalized jobs
+         * @description Returns a cursor-paginated list of normalized jobs. Unknown country eligibility is preserved as unknown.
+         */
+        get: operations["jobs-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a normalized job */
+        get: operations["jobs-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hide a job or mark it as applied */
+        post: operations["job-feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved candidate matches */
+        get: operations["matches-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/matches/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recalculate and save candidate matches
+         * @description Only jobs that pass hard eligibility and preference filters are scored and saved.
+         */
+        post: operations["matches-refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -362,10 +555,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/saved-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved jobs */
+        get: operations["saved-jobs-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a saved job */
+        delete: operations["saved-jobs-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List enabled job sources */
+        get: operations["sources-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/telegram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Telegram connection status */
+        get: operations["telegram-status"];
+        put?: never;
+        post?: never;
+        /** Disconnect Telegram */
+        delete: operations["telegram-disconnect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/telegram/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a one-time Telegram account link */
+        post: operations["telegram-link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/telegram/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get notification preferences */
+        get: operations["telegram-preferences-get"];
+        /** Update notification preferences */
+        put: operations["telegram-preferences-put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/telegram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Telegram bot updates */
+        post: operations["telegram-webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminAuditOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminAuditOutputBody.json
+             */
+            readonly $schema?: string;
+            events: components["schemas"]["SourceAudit"][] | null;
+        };
+        AdminOperationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminOperationOutputBody.json
+             */
+            readonly $schema?: string;
+            status: string;
+        };
+        AdminServiceActionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminServiceActionOutputBody.json
+             */
+            readonly $schema?: string;
+            service: components["schemas"]["Status"];
+            status: string;
+        };
+        AdminServicesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminServicesOutputBody.json
+             */
+            readonly $schema?: string;
+            services: components["schemas"]["Status"][] | null;
+        };
+        AdminSourcesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminSourcesOutputBody.json
+             */
+            readonly $schema?: string;
+            sources: components["schemas"]["Source"][] | null;
+        };
+        CallbackQueryStruct: {
+            data: string;
+            from: components["schemas"]["FromStruct1"];
+            id: string;
+        };
+        ChatStruct: {
+            /** Format: int64 */
+            id: number;
+            type: string;
+        };
+        Component: {
+            code: string;
+            /** Format: int64 */
+            score: number;
+            /** Format: int64 */
+            weight: number;
+        };
         DetectedPosition: {
             /** Format: double */
             confidence: number;
@@ -423,6 +800,15 @@ export interface components {
              */
             type: string;
         };
+        FromStruct: {
+            /** Format: int64 */
+            id: number;
+            username: string;
+        };
+        FromStruct1: {
+            /** Format: int64 */
+            id: number;
+        };
         HealthOutputBody: {
             /**
              * Format: uri
@@ -431,6 +817,69 @@ export interface components {
              */
             readonly $schema?: string;
             status: string;
+        };
+        Job: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Job.json
+             */
+            readonly $schema?: string;
+            apply_url: string;
+            company: string;
+            company_id: string;
+            countries: string[] | null;
+            /** Format: date-time */
+            created_at: string;
+            description: string;
+            eligibility: string;
+            employment_types: string[] | null;
+            /** Format: date-time */
+            first_seen_at: string;
+            id: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            location: string;
+            normalized_title: string;
+            /** Format: date-time */
+            published_at?: string;
+            remote_policy: string;
+            salary?: components["schemas"]["SalaryRange"];
+            seniority: string;
+            skills: components["schemas"]["JobSkill"][] | null;
+            /** Format: int64 */
+            source_priority: number;
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        JobFeedbackInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JobFeedbackInputBody.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            action: "hide" | "applied";
+        };
+        JobSkill: {
+            /** Format: double */
+            confidence: number;
+            id: string;
+            name: string;
+            required: boolean;
+        };
+        ListResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ListResult.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["Job"][] | null;
+            next_cursor: string;
         };
         LoginInputBody: {
             /**
@@ -442,10 +891,42 @@ export interface components {
             email: string;
             password: string;
         };
+        MatchesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MatchesOutputBody.json
+             */
+            readonly $schema?: string;
+            matches: components["schemas"]["Result"][] | null;
+        };
+        MessageStruct: {
+            chat: components["schemas"]["ChatStruct"];
+            from: components["schemas"]["FromStruct"];
+            text: string;
+        };
         Money: {
             /** Format: int64 */
             amount: number;
             currency: string;
+        };
+        NotificationPreferences: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/NotificationPreferences.json
+             */
+            readonly $schema?: string;
+            digest_enabled: boolean;
+            enabled: boolean;
+            immediate: boolean;
+            /** Format: int64 */
+            max_per_day?: number;
+            /** Format: int64 */
+            minimum_score: number;
+            quiet_end?: string;
+            quiet_start?: string;
+            timezone: string;
         };
         ParsedResume: {
             positions: components["schemas"]["DetectedPosition"][] | null;
@@ -555,6 +1036,14 @@ export interface components {
             password: string;
             token: string;
         };
+        Result: {
+            components: components["schemas"]["Component"][] | null;
+            eligible: boolean;
+            exclusions: string[] | null;
+            job_id: string;
+            /** Format: int64 */
+            score: number;
+        };
         Resume: {
             /**
              * Format: uri
@@ -624,6 +1113,33 @@ export interface components {
             readonly $schema?: string;
             resumes: components["schemas"]["Resume"][] | null;
         };
+        SalaryRange: {
+            currency: string;
+            /** Format: double */
+            maximum: number;
+            /** Format: double */
+            minimum: number;
+            period: string;
+        };
+        SavedJob: {
+            apply_url: string;
+            company: string;
+            job_id: string;
+            location: string;
+            /** Format: date-time */
+            saved_at: string;
+            status: string;
+            title: string;
+        };
+        SavedJobsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SavedJobsOutputBody.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["SavedJob"][] | null;
+        };
         Skill: {
             level?: string;
             name: string;
@@ -648,6 +1164,47 @@ export interface components {
             readonly $schema?: string;
             skills: components["schemas"]["Skill"][] | null;
         };
+        Source: {
+            company_name: string;
+            enabled: boolean;
+            id: string;
+            /** Format: date-time */
+            last_attempt_at: string | null;
+            /** Format: int64 */
+            last_fetched_jobs: number;
+            /** Format: int64 */
+            last_new_jobs: number;
+            /** Format: date-time */
+            last_sync_at: string | null;
+            last_sync_status?: string;
+            /** Format: int64 */
+            last_updated_jobs: number;
+            name: string;
+            /** Format: int64 */
+            priority: number;
+            /** Format: int64 */
+            sync_interval_seconds: number;
+            type: string;
+        };
+        SourceAudit: {
+            action: string;
+            actor: string;
+            /** Format: date-time */
+            created_at: string;
+            details: unknown;
+            /** Format: int64 */
+            id: number;
+            source_id: string;
+        };
+        SourceCatalogOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SourceCatalogOutputBody.json
+             */
+            readonly $schema?: string;
+            sources: components["schemas"]["Source"][] | null;
+        };
         SourcePreference: {
             enabled: boolean;
             source_id: string;
@@ -670,6 +1227,32 @@ export interface components {
             readonly $schema?: string;
             sources: components["schemas"]["SourcePreference"][] | null;
         };
+        SourceSettings: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SourceSettings.json
+             */
+            readonly $schema?: string;
+            enabled: boolean;
+            /** Format: int64 */
+            priority: number;
+            /** Format: int64 */
+            sync_interval_seconds: number;
+        };
+        Status: {
+            enabled: boolean;
+            last_error?: string;
+            name: string;
+            reason?: string;
+            /** Format: int64 */
+            start_count: number;
+            /** Format: date-time */
+            started_at?: string;
+            state: string;
+            /** Format: date-time */
+            stopped_at?: string;
+        };
         Suggestion: {
             /** Format: double */
             confidence: number;
@@ -678,6 +1261,48 @@ export interface components {
             resume_id: string;
             status: string;
             value: string;
+        };
+        TelegramLinkOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/TelegramLinkOutputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            expires_at: string;
+            url: string;
+        };
+        TelegramOKOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/TelegramOKOutputBody.json
+             */
+            readonly $schema?: string;
+            status: string;
+        };
+        TelegramOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/TelegramOutputBody.json
+             */
+            readonly $schema?: string;
+            connected: boolean;
+            /** Format: date-time */
+            connected_at?: string;
+            username?: string;
+        };
+        TelegramWebhookInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/TelegramWebhookInputBody.json
+             */
+            readonly $schema?: string;
+            callback_query?: components["schemas"]["CallbackQueryStruct"];
+            message?: components["schemas"]["MessageStruct"];
         };
         TokenOutputBody: {
             /**
@@ -709,6 +1334,204 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-services-list": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminServicesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-service-action": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminServiceActionOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-sources-list": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSourcesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-source-audit": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-source-settings": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOperationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-source-sync": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOperationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "auth-request-password-reset": {
         parameters: {
             query?: never;
@@ -950,6 +1773,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "jobs-list": {
+        parameters: {
+            query?: {
+                cursor?: string;
+                status?: string;
+                remote_policy?: string;
+                country?: string;
+                source?: string;
+                eligibility?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "jobs-get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "job-feedback": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobFeedbackInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramOKOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "matches-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "matches-refresh": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchesOutputBody"];
                 };
             };
             /** @description Error */
@@ -1570,6 +2562,295 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "saved-jobs-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedJobsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "saved-jobs-delete": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramOKOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "sources-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCatalogOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-status": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-disconnect": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramOKOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-link": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramLinkOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-preferences-get": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-preferences-put": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferences"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "telegram-webhook": {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Telegram-Bot-Api-Secret-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TelegramWebhookInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramOKOutputBody"];
+                };
             };
             /** @description Error */
             default: {

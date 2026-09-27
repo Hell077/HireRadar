@@ -6,6 +6,7 @@ type ChoiceCardProps = {
   icon?: ReactNode;
   label: string;
   name: string;
+  value?: string;
 };
 
 export function ChoiceCard({
@@ -14,6 +15,7 @@ export function ChoiceCard({
   icon,
   label,
   name,
+  value,
 }: ChoiceCardProps) {
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:bg-accent/40 has-checked:border-primary has-checked:bg-accent/60">
@@ -21,6 +23,7 @@ export function ChoiceCard({
         className="mt-1 size-4 accent-primary"
         type="checkbox"
         name={name}
+        value={value}
         defaultChecked={checked}
       />
       {icon ? (

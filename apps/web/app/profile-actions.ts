@@ -81,6 +81,56 @@ export async function updateSkills(formData: FormData) {
   redirect("/?skillsUpdated=1");
 }
 
+export async function saveOnboardingPreferences(formData: FormData) {
+  const roles = formData.getAll("roles").map(String);
+  const remotePolicies = formData.getAll("remotePolicy").map(String);
+  const employmentTypes = formData.getAll("employmentType").map(String);
+  const regions = formData.getAll("region").map(String);
+  const put = (path: string, body: unknown) =>
+    authenticatedRequest(
+      path,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      true,
+    );
+  const responses = await Promise.all([
+    put("/api/v1/profile/positions", { positions: roles }),
+    put("/api/v1/profile/preferences", {
+      remote_policies: remotePolicies,
+      employment_types: employmentTypes,
+      allowed_regions: regions,
+      excluded_countries: [],
+      minimum_match_score: 70,
+      maximum_job_age_days: 30,
+      notifications_enabled: formData.get("telegram") === "on",
+    }),
+  ]).catch(() => []);
+  if (responses.length !== 2 || responses.some((response) => !response?.ok)) {
+    redirect("/onboarding/preferences?error=1");
+  }
+  await authenticatedRequest(
+    "/api/v1/matches/refresh",
+    { method: "POST" },
+    true,
+  ).catch(() => null);
+  if (formData.get("telegram") === "on") {
+    const link = await authenticatedRequest(
+      "/api/v1/telegram/link",
+      { method: "POST" },
+      true,
+    ).catch(() => null);
+    if (link?.ok) {
+      const body = (await link.json()) as { url: string };
+      redirect(body.url);
+    }
+  }
+  revalidatePath("/");
+  redirect("/");
+}
+
 export async function signOut() {
   const refreshToken = (await cookies()).get("hr_refresh")?.value;
   if (refreshToken) {

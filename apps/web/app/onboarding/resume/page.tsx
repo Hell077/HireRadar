@@ -13,18 +13,23 @@ export default async function OnboardingResumePage() {
       title={t("resumeTitle")}
       description={t("resumeDescription")}
     >
-      <ResumeUploader labels={{
-        drop: t("dropResume"),
-        help: t("fileHelp"),
-        choose: t("chooseFile"),
-        privacy: t("privacy"),
-        uploading: t("uploading"),
-        uploaded: t("uploaded"),
-        error: t("uploadError"),
-      }} />
+      <ResumeUploader
+        labels={{
+          drop: t("dropResume"),
+          help: t("fileHelp"),
+          choose: t("chooseFile"),
+          privacy: t("privacy"),
+          uploading: t("uploading"),
+          uploaded: t("uploaded"),
+          error: t("uploadError"),
+        }}
+      />
       <p className="mt-5 text-center text-sm text-muted-foreground">
-        {t("manual")} {" "}
-        <Link className="font-medium text-primary hover:underline" href="/onboarding/review">
+        {t("manual")}{" "}
+        <Link
+          className="font-medium text-primary hover:underline"
+          href="/onboarding/review"
+        >
           {t("skip")}
         </Link>
       </p>

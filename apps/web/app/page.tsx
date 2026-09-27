@@ -20,6 +20,8 @@ import {
   ReplaceResumeDialog,
 } from "@/components/profile/profile-editors";
 import { getCandidateData } from "@/lib/api/server";
+import { connectTelegram } from "@/app/settings-actions";
+import { deleteResume, downloadResume } from "@/app/resume-actions";
 
 function SectionHeading({
   title,
@@ -45,7 +47,19 @@ export default async function ProfilePage({
   const status = await searchParams;
   const candidate = await getCandidateData();
   if (!candidate) redirect("/sign-in");
-  const { profile, skills } = candidate;
+  const {
+    profile,
+    skills,
+    positions,
+    preferences,
+    resumes,
+    sources,
+    telegram,
+  } = candidate;
+  const latestResume = [...resumes].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  )[0];
+  const enabledSources = sources.filter(({ enabled }) => enabled);
   const fullName =
     [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
     t("unnamed");
@@ -132,12 +146,38 @@ export default async function ProfilePage({
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-semibold">
-                    timur-k-resume.pdf
+                    {latestResume?.file_name ?? t("noResume")}
                   </p>
                   <p className="text-muted-foreground mt-0.5 text-[11px]">
-                    {t("resumeStatus")}
+                    {latestResume
+                      ? `${latestResume.status} · ${new Date(latestResume.updated_at).toLocaleDateString()}`
+                      : t("resumeMissing")}
                   </p>
                 </div>
+                {latestResume ? (
+                  <div className="ml-auto flex gap-2">
+                    <form action={downloadResume}>
+                      <input
+                        type="hidden"
+                        name="resumeId"
+                        value={latestResume.id}
+                      />
+                      <Button type="submit" size="sm" variant="outline">
+                        {t("downloadResume")}
+                      </Button>
+                    </form>
+                    <form action={deleteResume}>
+                      <input
+                        type="hidden"
+                        name="resumeId"
+                        value={latestResume.id}
+                      />
+                      <Button type="submit" size="sm" variant="ghost">
+                        {t("deleteResume")}
+                      </Button>
+                    </form>
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -165,9 +205,15 @@ export default async function ProfilePage({
               />
               <dl className="mt-5 grid gap-5 sm:grid-cols-3">
                 {[
-                  [t("roles"), t("rolesValue")],
-                  [t("remoteRegion"), t("regionValue")],
-                  [t("employment"), t("employmentValue")],
+                  [t("roles"), positions.join(" · ") || "—"],
+                  [
+                    t("remoteRegion"),
+                    preferences?.remote_policies?.join(" · ") || "—",
+                  ],
+                  [
+                    t("employment"),
+                    preferences?.employment_types?.join(" · ") || "—",
+                  ],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="text-muted-foreground text-[11px] font-semibold">
@@ -207,17 +253,23 @@ export default async function ProfilePage({
                 <div>
                   <h2 className="text-sm font-semibold">{t("telegram")}</h2>
                   <p className="text-muted-foreground text-[11px]">
-                    {t("notConnected")}
+                    {telegram?.connected
+                      ? `@${telegram.username ?? "telegram"}`
+                      : t("notConnected")}
                   </p>
                 </div>
               </div>
               <p className="text-muted-foreground mt-4 text-xs leading-5">
                 {t("telegramHelp")}
               </p>
-              <Button className="mt-4 w-full" size="lg">
-                <LinkIcon aria-hidden="true" />
-                {t("connectTelegram")}
-              </Button>
+              {!telegram?.connected ? (
+                <form action={connectTelegram}>
+                  <Button className="mt-4 w-full" size="lg" type="submit">
+                    <LinkIcon aria-hidden="true" />
+                    {t("connectTelegram")}
+                  </Button>
+                </form>
+              ) : null}
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5">
@@ -226,10 +278,11 @@ export default async function ProfilePage({
                 <h2 className="text-sm font-semibold">{t("sources")}</h2>
               </div>
               <p className="mt-3 text-[13px] font-semibold">
-                {t("sourcesEnabled")}
+                {t("sourcesEnabledCount", { count: enabledSources.length })}
               </p>
               <p className="text-muted-foreground mt-1 text-[11px] leading-4">
-                {t("sourcesList")}
+                {enabledSources.map(({ source_id }) => source_id).join(", ") ||
+                  "—"}
               </p>
             </section>
 

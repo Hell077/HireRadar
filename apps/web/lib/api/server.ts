@@ -82,14 +82,56 @@ export async function authenticatedRequest(
 }
 
 export async function getCandidateData() {
-  const [profileResponse, skillsResponse] = await Promise.all([
+  const [
+    profileResponse,
+    skillsResponse,
+    positionsResponse,
+    preferencesResponse,
+    resumesResponse,
+    sourcesResponse,
+    telegramResponse,
+  ] = await Promise.all([
     authenticatedRequest("/api/v1/profile"),
     authenticatedRequest("/api/v1/profile/skills"),
+    authenticatedRequest("/api/v1/profile/positions"),
+    authenticatedRequest("/api/v1/profile/preferences"),
+    authenticatedRequest("/api/v1/resumes"),
+    authenticatedRequest("/api/v1/profile/sources"),
+    authenticatedRequest("/api/v1/telegram"),
   ]);
   if (!profileResponse?.ok || !skillsResponse?.ok) return null;
   const profile = (await profileResponse.json()) as CandidateProfile;
   const body = (await skillsResponse.json()) as {
     skills: CandidateSkill[] | null;
   };
-  return { profile, skills: body.skills ?? [] };
+  const positions = positionsResponse?.ok
+    ? ((
+        (await positionsResponse.json()) as components["schemas"]["PositionsOutputBody"]
+      ).positions ?? [])
+    : [];
+  const preferences = preferencesResponse?.ok
+    ? ((await preferencesResponse.json()) as components["schemas"]["Preferences"])
+    : null;
+  const resumes = resumesResponse?.ok
+    ? ((
+        (await resumesResponse.json()) as components["schemas"]["ResumesOutputBody"]
+      ).resumes ?? [])
+    : [];
+  const sources = sourcesResponse?.ok
+    ? ((
+        (await sourcesResponse.json()) as components["schemas"]["SourcePreferencesOutputBody"]
+      ).sources ?? [])
+    : [];
+  const telegram = telegramResponse?.ok
+    ? ((await telegramResponse.json()) as components["schemas"]["TelegramOutputBody"])
+    : null;
+  return {
+    profile,
+    skills: body.skills ?? [],
+    positions,
+    preferences,
+    resumes,
+    sources,
+    telegram,
+  };
 }

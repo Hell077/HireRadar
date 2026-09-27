@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
-
-import { Bookmark, BriefcaseBusiness, Clock3, MapPin } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  Clock3,
+  EyeOff,
+  MapPin,
+  Trash2,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Button } from "@repo/ui/components/button";
 
 import type { Job } from "@/lib/jobs";
+import { hideJob, removeSavedJob } from "@/app/job-actions";
 
-export function JobCard({ job }: { job: Job }) {
+export function JobCard({ job, saved = false }: { job: Job; saved?: boolean }) {
   const t = useTranslations("jobs");
   const router = useRouter();
-  const [saved, setSaved] = useState(false);
   const href = `/jobs/${job.id}`;
 
   function openJob() {
@@ -47,23 +51,25 @@ export function JobCard({ job }: { job: Job }) {
                 {job.company}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={saved ? t("removeSavedJob") : t("saveJob")}
-              aria-pressed={saved}
-              onClick={(event) => {
-                event.stopPropagation();
-                setSaved((value) => !value);
-              }}
+            <form
+              action={saved ? removeSavedJob : hideJob}
+              onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
-              className={saved ? "bg-accent text-primary" : ""}
             >
-              <Bookmark
-                className={saved ? "fill-current" : ""}
-                aria-hidden="true"
-              />
-            </Button>
+              <input type="hidden" name="jobId" value={job.id} />
+              <Button
+                variant="ghost"
+                size="icon"
+                type="submit"
+                aria-label={saved ? t("removeSavedJob") : t("hideJob")}
+              >
+                {saved ? (
+                  <Trash2 aria-hidden="true" />
+                ) : (
+                  <EyeOff aria-hidden="true" />
+                )}
+              </Button>
+            </form>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
@@ -98,9 +104,11 @@ export function JobCard({ job }: { job: Job }) {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold">{job.salary}</span>
-              <span className="rounded-full bg-success-soft px-3 py-1.5 text-xs font-bold text-success">
-                {job.match}% {t("match")}
-              </span>
+              {job.match > 0 ? (
+                <span className="rounded-full bg-success-soft px-3 py-1.5 text-xs font-bold text-success">
+                  {job.match}% {t("match")}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

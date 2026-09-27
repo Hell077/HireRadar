@@ -1,22 +1,32 @@
-import { BriefcaseBusiness, Search, SlidersHorizontal } from "lucide-react";
+import { BriefcaseBusiness, SlidersHorizontal } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@repo/ui/components/button";
-import { Input } from "@repo/ui/components/input";
 
 import { AppHeader } from "@/components/app-header";
 import { JobCard } from "@/components/jobs/job-card";
 import { StatusState } from "@/components/feedback/status-state";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
-import { jobs } from "@/lib/jobs";
+import { getJobs } from "@/lib/jobs";
 
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ empty?: string }>;
+  searchParams: Promise<{
+    empty?: string;
+    remote_policy?: string;
+    country?: string;
+    eligibility?: string;
+  }>;
 }) {
   const t = await getTranslations("jobs");
-  const empty = (await searchParams).empty === "1";
+  const params = await searchParams;
+  const query = new URLSearchParams({ status: "active", limit: "100" });
+  if (params.remote_policy) query.set("remote_policy", params.remote_policy);
+  if (params.country) query.set("country", params.country.toUpperCase());
+  if (params.eligibility) query.set("eligibility", params.eligibility);
+  const jobs = await getJobs(query.toString());
+  const empty = params.empty === "1" || jobs.length === 0;
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -44,43 +54,38 @@ export default async function JobsPage({
             className="mt-8 rounded-xl border bg-card p-4"
             aria-label={t("filters")}
           >
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Search
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  className="h-11 pl-9"
-                  placeholder={t("searchPlaceholder")}
-                />
-              </div>
-              <Button variant="outline" size="lg">
+            <form className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <select
+                name="remote_policy"
+                defaultValue={params.remote_policy ?? ""}
+                className="h-11 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">{t("allRemotePolicies")}</option>
+                <option value="worldwide">Worldwide</option>
+                <option value="remote">Remote</option>
+                <option value="remote_region">Remote region</option>
+              </select>
+              <input
+                name="country"
+                defaultValue={params.country ?? ""}
+                maxLength={2}
+                placeholder={t("countryCode")}
+                className="h-11 rounded-md border bg-background px-3 text-sm uppercase"
+              />
+              <select
+                name="eligibility"
+                defaultValue={params.eligibility ?? ""}
+                className="h-11 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">{t("allEligibility")}</option>
+                <option value="eligible">Eligible</option>
+                <option value="unknown">Unknown</option>
+              </select>
+              <Button type="submit" variant="outline" size="lg">
                 <SlidersHorizontal aria-hidden="true" />
                 {t("filters")}
               </Button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                t("allMatches"),
-                "Go",
-                "React",
-                t("worldwide"),
-                t("contract"),
-              ].map((filter, index) => (
-                <button
-                  key={filter}
-                  type="button"
-                  className={
-                    index === 0
-                      ? "rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                      : "rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-accent"
-                  }
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
+            </form>
           </section>
         </Reveal>
 

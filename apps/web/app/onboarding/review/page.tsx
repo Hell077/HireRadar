@@ -52,7 +52,11 @@ export default async function OnboardingReviewPage() {
               label={t("experience")}
               name="experience"
               type="number"
-              defaultValue={analysis ? String(Math.round(analysis.total_experience_months / 12)) : ""}
+              defaultValue={
+                analysis
+                  ? String(Math.round(analysis.total_experience_months / 12))
+                  : ""
+              }
               readOnly
             />
           </CardContent>
@@ -64,11 +68,22 @@ export default async function OnboardingReviewPage() {
           </CardHeader>
           <CardContent>
             {result?.resume && analysis ? (
-              <ResumeSuggestions resumeID={result.resume.id} suggestions={result.suggestions} labels={{
-                accept: t("acceptSuggestion"), reject: t("rejectSuggestion"), accepted: t("suggestionAccepted"),
-                rejected: t("suggestionRejected"), failed: t("suggestionReviewError"),
-              }} />
-            ) : <p className="text-sm text-muted-foreground">{t("noSuggestions")}</p>}
+              <ResumeSuggestions
+                resumeID={result.resume.id}
+                suggestions={result.suggestions}
+                labels={{
+                  accept: t("acceptSuggestion"),
+                  reject: t("rejectSuggestion"),
+                  accepted: t("suggestionAccepted"),
+                  rejected: t("suggestionRejected"),
+                  failed: t("suggestionReviewError"),
+                }}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("noSuggestions")}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -77,9 +92,20 @@ export default async function OnboardingReviewPage() {
             <CardTitle>{t("recentExperience")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
-            {analysis?.positions?.length ? analysis.positions.map((position) => (
-              <p className="rounded-lg bg-secondary/50 p-3 text-sm" key={position.title}>{position.title}</p>
-            )) : <p className="text-sm text-muted-foreground">{t("noSuggestions")}</p>}
+            {analysis?.positions?.length ? (
+              analysis.positions.map((position) => (
+                <p
+                  className="rounded-lg bg-secondary/50 p-3 text-sm"
+                  key={position.title}
+                >
+                  {position.title}
+                </p>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("noSuggestions")}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
