@@ -39,6 +39,7 @@ import (
 	ats "github.com/Hell077/HireRadar/apps/backend/internal/source/adapters/ats"
 	sourcepostgres "github.com/Hell077/HireRadar/apps/backend/internal/source/adapters/postgres"
 	sourceapp "github.com/Hell077/HireRadar/apps/backend/internal/source/application"
+	sourcebootstrap "github.com/Hell077/HireRadar/apps/backend/internal/source/bootstrap"
 	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -89,6 +90,11 @@ func run() error {
 		if err := migrate(ctx, cfg.DatabaseURL); err != nil {
 			return fmt.Errorf("migrate PostgreSQL: %w", err)
 		}
+		seeded, err := sourcebootstrap.RegisterDefaults(ctx, client.Pool())
+		if err != nil {
+			return fmt.Errorf("bootstrap default job sources: %w", err)
+		}
+		slog.Info("default job sources checked", "inserted", seeded, "defaults", len(sourcebootstrap.Defaults))
 		database = client
 		store := authpostgres.NewRegistrationStore(client.Pool())
 		services.Registrar = application.NewRegisterService(store, password.Argon2id{}, time.Now)
