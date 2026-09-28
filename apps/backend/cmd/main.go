@@ -24,6 +24,11 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/adapters/token"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/config"
+	discovery "github.com/Hell077/HireRadar/apps/backend/internal/discovery"
+	discoverygithub "github.com/Hell077/HireRadar/apps/backend/internal/discovery/adapters/github"
+	discoverypostgres "github.com/Hell077/HireRadar/apps/backend/internal/discovery/adapters/postgres"
+	discoveryweb "github.com/Hell077/HireRadar/apps/backend/internal/discovery/adapters/web"
+	discoveryapp "github.com/Hell077/HireRadar/apps/backend/internal/discovery/application"
 	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
 	"github.com/Hell077/HireRadar/apps/backend/internal/lifecycle"
 	matchpostgres "github.com/Hell077/HireRadar/apps/backend/internal/matching/adapters/postgres"
@@ -95,6 +100,13 @@ func run() error {
 			return fmt.Errorf("bootstrap default job sources: %w", err)
 		}
 		slog.Info("default job sources checked", "inserted", seeded, "defaults", len(sourcebootstrap.Defaults))
+		discoveryStore := discoverypostgres.NewStore(client.Pool())
+		discoverySeeded, err := discovery.RegisterSources(ctx, client.Pool())
+		if err != nil {
+			return fmt.Errorf("register default discovery catalogs: %w", err)
+		}
+		slog.Info("default discovery catalogs checked", "inserted", discoverySeeded, "defaults", len(discovery.DefaultSources))
+		atsRegistry := ats.NewRegistryWithGitHubToken(os.Getenv("GITHUB_TOKEN"))
 		database = client
 		store := authpostgres.NewRegistrationStore(client.Pool())
 		services.Registrar = application.NewRegisterService(store, password.Argon2id{}, time.Now)
@@ -116,14 +128,26 @@ func run() error {
 			if err != nil || parallelism < 1 || parallelism > 32 {
 				return errors.New("SOURCE_WORKER_PARALLELISM must be between 1 and 32")
 			}
-			sourceWorker := sourceapp.NewWorker(client.Pool(), ats.NewRegistry(), parallelism)
+			sourceWorker := sourceapp.NewWorker(client.Pool(), atsRegistry, parallelism)
 			sourceWorker.SetErrorReporter(serviceReporter(manager, "source"))
 			runners["source"] = sourceWorker.Run
 		} else {
-			sourceWorker := sourceapp.NewWorker(client.Pool(), ats.NewRegistry(), 4)
+			sourceWorker := sourceapp.NewWorker(client.Pool(), atsRegistry, 4)
 			sourceWorker.SetErrorReporter(serviceReporter(manager, "source"))
 			runners["source"] = sourceWorker.Run
 		}
+		discoveryParallelism := 4
+		if value := os.Getenv("DISCOVERY_WORKER_PARALLELISM"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 1 || parsed > 16 {
+				return errors.New("DISCOVERY_WORKER_PARALLELISM must be between 1 and 16")
+			}
+			discoveryParallelism = parsed
+		}
+		discoveryWorker := discoveryapp.NewWorker(discoveryStore, discoverygithub.New(os.Getenv("GITHUB_TOKEN")), discoveryweb.NewResolver(), atsRegistry, discoveryParallelism)
+		discoveryWorker.SetErrorReporter(serviceReporter(manager, "discovery"))
+		runners["discovery"] = discoveryWorker.Run
+		services.Discovery = discoveryWorker
 		matcher := matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
 		matchWorker := matchpostgres.NewOutboxWorker(client.Pool(), func(ctx context.Context, id userdomain.UserID) error {
 			_, err := matcher.Refresh(ctx, id)
@@ -187,11 +211,11 @@ func run() error {
 			services.Verifier = signer
 		}
 	} else {
-		for _, name := range []string{"source", "matching", "notification", "email", "resume"} {
+		for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume"} {
 			disabledReasons[name] = "DATABASE_URL is not configured"
 		}
 	}
-	for _, name := range []string{"source", "matching", "notification", "email", "resume"} {
+	for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume"} {
 		runner, enabled := runners[name]
 		reason := disabledReasons[name]
 		if name == "notification" && cfg.TelegramBotToken == "" {
