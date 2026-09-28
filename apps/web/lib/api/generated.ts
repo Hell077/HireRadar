@@ -1968,6 +1968,7 @@ export interface operations {
                 country?: string;
                 source?: string;
                 eligibility?: string;
+                ids?: string;
                 limit?: number;
             };
             header?: never;

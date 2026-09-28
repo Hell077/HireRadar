@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"strings"
 
 	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
@@ -22,6 +23,7 @@ type jobsListInput struct {
 	Country      string `query:"country"`
 	SourceID     string `query:"source"`
 	Eligibility  string `query:"eligibility"`
+	IDs          string `query:"ids" maxLength:"3700"`
 	Limit        int    `query:"limit" default:"25" minimum:"1" maximum:"100"`
 }
 
@@ -36,7 +38,14 @@ func registerJobs(api huma.API, catalog JobCatalog) {
 		if catalog == nil {
 			return nil, huma.Error503ServiceUnavailable("job catalog unavailable")
 		}
-		result, err := catalog.List(ctx, jobpostgres.ListQuery{Cursor: input.Cursor, Status: input.Status, RemotePolicy: input.RemotePolicy, Country: input.Country, SourceID: input.SourceID, Eligibility: input.Eligibility, Limit: input.Limit})
+		ids := []string(nil)
+		if strings.TrimSpace(input.IDs) != "" {
+			ids = strings.Split(input.IDs, ",")
+			for i := range ids {
+				ids[i] = strings.TrimSpace(ids[i])
+			}
+		}
+		result, err := catalog.List(ctx, jobpostgres.ListQuery{Cursor: input.Cursor, Status: input.Status, RemotePolicy: input.RemotePolicy, Country: input.Country, SourceID: input.SourceID, Eligibility: input.Eligibility, IDs: ids, Limit: input.Limit})
 		if errors.Is(err, jobdomain.ErrInvalidCursor) || errors.Is(err, jobdomain.ErrInvalidQuery) {
 			return nil, huma.Error400BadRequest("invalid job list query")
 		}

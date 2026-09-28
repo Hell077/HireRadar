@@ -78,6 +78,13 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	if len(second.Items) != 1 || second.Items[0].ID == first.Items[0].ID || second.NextCursor != "" {
 		t.Fatalf("unexpected second page: %+v", second)
 	}
+	byIDs, err := catalog.List(ctx, ListQuery{Limit: 10, IDs: []string{first.Items[0].ID, second.Items[0].ID}})
+	if err != nil || len(byIDs.Items) != 2 {
+		t.Fatalf("job ID filter returned %d jobs, error %v", len(byIDs.Items), err)
+	}
+	if _, err := catalog.List(ctx, ListQuery{Limit: 10, IDs: []string{"invalid"}}); !errors.Is(err, jobdomain.ErrInvalidQuery) {
+		t.Fatalf("invalid job ID filter error = %v", err)
+	}
 	filtered, err := catalog.List(ctx, ListQuery{Limit: 1, Country: "KZ", SourceID: sourceID, Eligibility: string(jobdomain.Eligible)})
 	if err != nil {
 		t.Fatal(err)

@@ -18,6 +18,7 @@ import (
 type Catalog struct{ pool *pgxpool.Pool }
 type ListQuery struct {
 	Cursor, Status, RemotePolicy, Country, SourceID, Eligibility string
+	IDs                                                          []string
 	Limit                                                        int
 }
 type ListResult struct {
@@ -57,6 +58,17 @@ func (c *Catalog) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	if q.SourceID != "" && !sourceSlug.MatchString(q.SourceID) {
 		return ListResult{}, fmt.Errorf("%w: invalid source ID", jobdomain.ErrInvalidQuery)
 	}
+	if len(q.IDs) > 100 {
+		return ListResult{}, fmt.Errorf("%w: at most 100 job IDs may be requested", jobdomain.ErrInvalidQuery)
+	}
+	jobIDs := make([]uuid.UUID, 0, len(q.IDs))
+	for _, id := range q.IDs {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return ListResult{}, fmt.Errorf("%w: invalid job ID", jobdomain.ErrInvalidQuery)
+		}
+		jobIDs = append(jobIDs, parsed)
+	}
 	args := []any{q.Status}
 	conditions := []string{"j.status=$1"}
 	add := func(value any, condition string) {
@@ -74,6 +86,9 @@ func (c *Catalog) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	}
 	if q.SourceID != "" {
 		add(q.SourceID, "EXISTS(SELECT 1 FROM job_sources js WHERE js.job_id=j.id AND js.source_id=$%d AND js.is_active)")
+	}
+	if len(q.IDs) > 0 {
+		add(jobIDs, "j.id=ANY($%d::uuid[])")
 	}
 	if q.Cursor != "" {
 		created, id, err := decodeCursor(q.Cursor)

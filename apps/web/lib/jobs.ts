@@ -89,14 +89,22 @@ async function getMatchMap() {
 }
 
 export async function getJobs(query = "status=active&limit=100") {
-  const [response, matches] = await Promise.all([
-    apiRequest(`/api/v1/jobs?${query}`).catch(() => null),
-    getMatchMap(),
-  ]);
+  const matches = await getMatchMap();
+  if (!matches?.size) return [];
+  const params = new URLSearchParams(query);
+  params.set("ids", [...matches.keys()].join(","));
+  params.set("limit", "100");
+  const response = await apiRequest(`/api/v1/jobs?${params.toString()}`).catch(
+    () => null,
+  );
   if (!response?.ok) return [];
   const body = (await response.json()) as components["schemas"]["ListResult"];
+  const rank = new Map([...matches.keys()].map((id, index) => [id, index]));
   return (body.items ?? [])
-    .filter((job) => matches === null || matches.has(job.id))
+    .sort(
+      (left, right) =>
+        (rank.get(left.id) ?? Infinity) - (rank.get(right.id) ?? Infinity),
+    )
     .map((job) => mapJob(job, matches?.get(job.id)));
 }
 
