@@ -1,5 +1,6 @@
 import { BriefcaseBusiness, SlidersHorizontal } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
 import { Button } from "@repo/ui/components/button";
 
 import { AppHeader } from "@/components/app-header";
@@ -8,6 +9,7 @@ import { StatusState } from "@/components/feedback/status-state";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
 import { getJobs } from "@/lib/jobs";
+import { authenticatedRequest } from "@/lib/api/server";
 
 export default async function JobsPage({
   searchParams,
@@ -21,6 +23,8 @@ export default async function JobsPage({
 }) {
   const t = await getTranslations("jobs");
   const params = await searchParams;
+  const profile = await authenticatedRequest("/api/v1/profile");
+  if (!profile?.ok) redirect("/sign-in");
   const query = new URLSearchParams({ status: "active", limit: "100" });
   if (params.remote_policy) query.set("remote_policy", params.remote_policy);
   if (params.country) query.set("country", params.country.toUpperCase());

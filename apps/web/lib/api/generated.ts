@@ -1,4 +1,38 @@
 export interface paths {
+    "/api/v1/admin/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read source discovery status */
+        get: operations["admin-discovery-overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/discovery/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schedule a source discovery run */
+        post: operations["admin-discovery-run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/services": {
         parameters: {
             query?: never;
@@ -659,6 +693,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read backend build identity */
+        get: operations["version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/telegram": {
         parameters: {
             query?: never;
@@ -688,6 +739,16 @@ export interface components {
              */
             readonly $schema?: string;
             events: components["schemas"]["SourceAudit"][] | null;
+        };
+        AdminDiscoveryRunOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminDiscoveryRunOutputBody.json
+             */
+            readonly $schema?: string;
+            id: string;
+            status: string;
         };
         AdminOperationOutputBody: {
             /**
@@ -743,6 +804,11 @@ export interface components {
             /** Format: int64 */
             weight: number;
         };
+        Count: {
+            /** Format: int64 */
+            count: number;
+            key: string;
+        };
         DetectedPosition: {
             /** Format: double */
             confidence: number;
@@ -752,6 +818,26 @@ export interface components {
             /** Format: double */
             confidence: number;
             name: string;
+        };
+        DiscoverySourceStatus: {
+            /** Format: int64 */
+            candidates_created: number;
+            /** Format: int64 */
+            candidates_reused: number;
+            id: string;
+            last_error?: string;
+            /** Format: date-time */
+            last_run_at?: string;
+            last_status?: string;
+            name: string;
+            /** Format: date-time */
+            next_run_at: string;
+            /** Format: int64 */
+            provenance_added: number;
+            repo_name: string;
+            repo_owner: string;
+            /** Format: int64 */
+            targets_seen: number;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -928,7 +1014,19 @@ export interface components {
             quiet_start?: string;
             timezone: string;
         };
+        Overview: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Overview.json
+             */
+            readonly $schema?: string;
+            candidate_states: components["schemas"]["Count"][] | null;
+            providers: components["schemas"]["Count"][] | null;
+            sources: components["schemas"]["DiscoverySourceStatus"][] | null;
+        };
         ParsedResume: {
+            languages: string[] | null;
             positions: components["schemas"]["DetectedPosition"][] | null;
             resume_id: string;
             skills: components["schemas"]["DetectedSkill"][] | null;
@@ -1325,6 +1423,17 @@ export interface components {
             readonly $schema?: string;
             token: string;
         };
+        VersionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/VersionOutputBody.json
+             */
+            readonly $schema?: string;
+            build_time: string;
+            commit: string;
+            version: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1334,6 +1443,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-discovery-overview": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-discovery-run": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDiscoveryRunOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "admin-services-list": {
         parameters: {
             query?: never;
@@ -2815,6 +2988,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionOutputBody"];
                 };
             };
             /** @description Error */

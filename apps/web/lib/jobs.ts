@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import type { components } from "@/lib/api/generated";
 import { apiRequest, authenticatedRequest } from "@/lib/api/server";
 
@@ -75,9 +76,11 @@ function mapJob(job: APIJob, match?: Match): Job {
 }
 
 async function getMatchMap() {
-  const response = await authenticatedRequest("/api/v1/matches").catch(
-    () => null,
-  );
+  const accessToken = (await cookies()).get("hr_access")?.value;
+  if (!accessToken) return null;
+  const response = await authenticatedRequest(
+    "/api/v1/matches?limit=100",
+  ).catch(() => null);
   if (!response?.ok) return new Map<string, Match>();
   const body = (await response.json()) as {
     matches: Match[] | null;
@@ -92,7 +95,9 @@ export async function getJobs(query = "status=active&limit=100") {
   ]);
   if (!response?.ok) return [];
   const body = (await response.json()) as components["schemas"]["ListResult"];
-  return (body.items ?? []).map((job) => mapJob(job, matches.get(job.id)));
+  return (body.items ?? [])
+    .filter((job) => matches === null || matches.has(job.id))
+    .map((job) => mapJob(job, matches?.get(job.id)));
 }
 
 export async function getJob(id: string) {
@@ -102,7 +107,7 @@ export async function getJob(id: string) {
   ]);
   if (!response?.ok) return null;
   const job = (await response.json()) as APIJob;
-  return mapJob(job, matches.get(job.id));
+  return mapJob(job, matches?.get(job.id));
 }
 
 export async function getSavedJobs() {

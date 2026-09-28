@@ -59,6 +59,28 @@ export default async function OnboardingReviewPage() {
               }
               readOnly
             />
+            <div className="sm:col-span-2">
+              <p className="text-sm font-medium">{t("languagesDetected")}</p>
+              {analysis?.languages?.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {analysis.languages.map((language) => (
+                    <span
+                      className="rounded-full bg-secondary px-3 py-1 text-sm font-medium"
+                      key={language}
+                    >
+                      {language.toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("noLanguagesDetected")}
+                </p>
+              )}
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t("languageFilterDescription")}
+              </p>
+            </div>
           </CardContent>
         </Card>
 
