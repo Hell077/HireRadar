@@ -38,7 +38,20 @@ done:
 }
 
 func TitleKey(title string) string {
-	return strings.TrimSpace(nonWord.ReplaceAllString(strings.ToLower(title), " "))
+	var normalized strings.Builder
+	space := true
+	for _, char := range strings.ToLower(strings.TrimSpace(title)) {
+		if unicode.IsLetter(char) || unicode.IsNumber(char) {
+			normalized.WriteRune(char)
+			space = false
+			continue
+		}
+		if !space {
+			normalized.WriteByte(' ')
+			space = true
+		}
+	}
+	return strings.TrimSpace(normalized.String())
 }
 
 func CleanDescription(value string) string {

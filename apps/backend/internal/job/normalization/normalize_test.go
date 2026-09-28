@@ -91,6 +91,9 @@ func TestNormalizationPreservesDisplayDataAndCanonicalizesKeys(t *testing.T) {
 	if got := TitleKey("Sr. Go/Backend Engineer!"); got != "sr go backend engineer" {
 		t.Fatalf("title key=%q", got)
 	}
+	if got := TitleKey("セキュリティエンジニア 2026"); got != "セキュリティエンジニア 2026" {
+		t.Fatalf("unicode title key=%q", got)
+	}
 	if got := CleanDescription("<p>Build&nbsp;tools &amp; APIs</p>"); got != "Build tools & APIs" {
 		t.Fatalf("description=%q", got)
 	}

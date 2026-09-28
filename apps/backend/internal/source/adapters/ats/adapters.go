@@ -1,6 +1,7 @@
 package ats
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,9 +22,16 @@ type Fetcher interface {
 	Fetch(context.Context, domain.Source) (domain.FetchResult, error)
 }
 
-type Registry struct{ client *http.Client }
+type Registry struct {
+	client      *http.Client
+	githubToken string
+}
 
-func NewRegistry() *Registry { return &Registry{client: &http.Client{Timeout: 30 * time.Second}} }
+func NewRegistry() *Registry { return NewRegistryWithGitHubToken("") }
+
+func NewRegistryWithGitHubToken(token string) *Registry {
+	return &Registry{client: &http.Client{Timeout: 30 * time.Second}, githubToken: strings.TrimSpace(token)}
+}
 
 func (r *Registry) Fetch(ctx context.Context, source domain.Source) (domain.FetchResult, error) {
 	switch source.Type {
@@ -92,19 +100,6 @@ func (r *Registry) get(ctx context.Context, endpoint string) ([]byte, error) {
 	return data, nil
 }
 
-type greenhouseResponse struct {
-	Jobs []struct {
-		ID       int64  `json:"id"`
-		Title    string `json:"title"`
-		Content  string `json:"content"`
-		URL      string `json:"absolute_url"`
-		Updated  string `json:"updated_at"`
-		Location struct {
-			Name string `json:"name"`
-		} `json:"location"`
-	} `json:"jobs"`
-}
-
 func (r *Registry) fetchGreenhouse(ctx context.Context, source domain.Source) (domain.FetchResult, error) {
 	cfg, err := readConfig(source)
 	if err != nil {
@@ -115,14 +110,35 @@ func (r *Registry) fetchGreenhouse(ctx context.Context, source domain.Source) (d
 	if err != nil {
 		return domain.FetchResult{}, err
 	}
-	var response greenhouseResponse
+	var response struct {
+		Jobs *[]json.RawMessage `json:"jobs"`
+	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return domain.FetchResult{}, fmt.Errorf("decode Greenhouse response: %w", err)
 	}
-	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(response.Jobs))}
-	for _, item := range response.Jobs {
+	if response.Jobs == nil {
+		return domain.FetchResult{}, errors.New("decode Greenhouse response: jobs array is missing")
+	}
+	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(*response.Jobs))}
+	for _, raw := range *response.Jobs {
+		var item struct {
+			ID       int64  `json:"id"`
+			Title    string `json:"title"`
+			Content  string `json:"content"`
+			URL      string `json:"absolute_url"`
+			Updated  string `json:"updated_at"`
+			Location struct {
+				Name string `json:"name"`
+			} `json:"location"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return domain.FetchResult{}, fmt.Errorf("decode Greenhouse job: %w", err)
+		}
+		if item.ID < 1 || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.URL) == "" {
+			return domain.FetchResult{}, errors.New("decode Greenhouse job: id, title, or absolute_url is missing")
+		}
 		published := parseTime(item.Updated)
-		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(item.ID, 10), CompanyName: source.CompanyName, Title: item.Title, Description: item.Content, Location: item.Location.Name, ApplyURL: item.URL, PublishedAt: published, Raw: rawFor(body, item.ID)})
+		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(item.ID, 10), CompanyName: source.CompanyName, Title: item.Title, Description: item.Content, Location: item.Location.Name, ApplyURL: item.URL, PublishedAt: published, Raw: raw})
 	}
 	return result, nil
 }
@@ -154,6 +170,9 @@ func (r *Registry) fetchLever(ctx context.Context, source domain.Source) (domain
 			return domain.FetchResult{}, err
 		}
 		var rawItems []json.RawMessage
+		if len(bytes.TrimSpace(body)) == 0 || bytes.TrimSpace(body)[0] != '[' {
+			return domain.FetchResult{}, errors.New("decode Lever response: expected postings array")
+		}
 		if err := json.Unmarshal(body, &rawItems); err != nil {
 			return domain.FetchResult{}, fmt.Errorf("decode Lever response: %w", err)
 		}
@@ -162,6 +181,9 @@ func (r *Registry) fetchLever(ctx context.Context, source domain.Source) (domain
 			var item leverItem
 			if err := json.Unmarshal(raw, &item); err != nil {
 				return domain.FetchResult{}, fmt.Errorf("decode Lever posting: %w", err)
+			}
+			if strings.TrimSpace(item.ID) == "" || strings.TrimSpace(item.Text) == "" || strings.TrimSpace(item.URL) == "" {
+				return domain.FetchResult{}, errors.New("decode Lever posting: id, text, or hostedUrl is missing")
 			}
 			item.Raw = raw
 			items = append(items, item)
@@ -204,13 +226,16 @@ func (r *Registry) fetchAshby(ctx context.Context, source domain.Source) (domain
 		return domain.FetchResult{}, err
 	}
 	var response struct {
-		Jobs []json.RawMessage `json:"jobs"`
+		Jobs *[]json.RawMessage `json:"jobs"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return domain.FetchResult{}, fmt.Errorf("decode Ashby response: %w", err)
 	}
-	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(response.Jobs))}
-	for _, raw := range response.Jobs {
+	if response.Jobs == nil {
+		return domain.FetchResult{}, errors.New("decode Ashby response: jobs array is missing")
+	}
+	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(*response.Jobs))}
+	for _, raw := range *response.Jobs {
 		var item struct {
 			ID             string `json:"id"`
 			Title          string `json:"title"`
@@ -221,7 +246,10 @@ func (r *Registry) fetchAshby(ctx context.Context, source domain.Source) (domain
 			Published      string `json:"publishedAt"`
 		}
 		if err := json.Unmarshal(raw, &item); err != nil {
-			return domain.FetchResult{}, err
+			return domain.FetchResult{}, fmt.Errorf("decode Ashby job: %w", err)
+		}
+		if strings.TrimSpace(item.ID) == "" || strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.URL) == "" {
+			return domain.FetchResult{}, errors.New("decode Ashby job: id, title, or jobUrl is missing")
 		}
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Title, Description: item.Description, Location: item.Location, EmploymentType: item.EmploymentType, ApplyURL: item.URL, PublishedAt: parseTime(item.Published), Raw: raw})
 	}
@@ -235,6 +263,34 @@ type githubIssue struct {
 	URL         string          `json:"html_url"`
 	Created     string          `json:"created_at"`
 	PullRequest json.RawMessage `json:"pull_request"`
+}
+
+// IsJobPosting rejects ordinary repository discussion and software bugs from
+// generic GitHub Issues feeds while accepting common hiring/listing formats.
+func IsJobPosting(title, body string) bool {
+	titleLower := strings.ToLower(strings.TrimSpace(title))
+	text := strings.ToLower(title + "\n" + body)
+	for _, phrase := range []string{"hiring:", "we're hiring", "we are hiring", "job opening", "job posting", "job opportunity", "open position", "vacancy", "apply now", "looking for a", "seeking a", "contract opportunity", "internship opportunity"} {
+		if strings.Contains(titleLower, phrase) {
+			return true
+		}
+	}
+	hasRole := false
+	for _, role := range []string{"engineer", "developer", "designer", "analyst", "product manager", "technical writer", "devops", "intern", "recruiter", "researcher", "architect"} {
+		if strings.Contains(titleLower, role) {
+			hasRole = true
+			break
+		}
+	}
+	if !hasRole {
+		return false
+	}
+	for _, context := range []string{"apply", "application", "requirements", "responsibilities", "compensation", "salary", "location", "remote", "experience", "qualifications", "resume", "cv"} {
+		if strings.Contains(text, context) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domain.FetchResult, error) {
@@ -273,6 +329,9 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 		request.Header.Set("Accept", "application/vnd.github+json")
 		request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
 		request.Header.Set("User-Agent", "HireRadar-SourceWorker")
+		if r.githubToken != "" {
+			request.Header.Set("Authorization", "Bearer "+r.githubToken)
+		}
 		resp, err := r.client.Do(request)
 		if err != nil {
 			return domain.FetchResult{}, err
@@ -289,6 +348,9 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 			return domain.FetchResult{}, fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
 		}
 		var rows []json.RawMessage
+		if len(bytes.TrimSpace(body)) == 0 || bytes.TrimSpace(body)[0] != '[' {
+			return domain.FetchResult{}, errors.New("decode GitHub issues: expected issues array")
+		}
 		if err := json.Unmarshal(body, &rows); err != nil {
 			return domain.FetchResult{}, fmt.Errorf("decode GitHub issues: %w", err)
 		}
@@ -298,6 +360,12 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 				return domain.FetchResult{}, err
 			}
 			if len(issue.PullRequest) > 0 || issue.Number < 1 {
+				continue
+			}
+			if strings.TrimSpace(issue.Title) == "" || strings.TrimSpace(issue.URL) == "" {
+				return domain.FetchResult{}, errors.New("decode GitHub issue: title or html_url is missing")
+			}
+			if !IsJobPosting(issue.Title, issue.Body) {
 				continue
 			}
 			result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(issue.Number, 10), CompanyName: source.CompanyName, Title: issue.Title, Description: issue.Body, ApplyURL: issue.URL, PublishedAt: parseTime(issue.Created), Raw: raw})
@@ -322,21 +390,4 @@ func parseTime(value string) *time.Time {
 	}
 	t = t.UTC()
 	return &t
-}
-func rawFor(body []byte, id int64) json.RawMessage {
-	var doc map[string]json.RawMessage
-	if json.Unmarshal(body, &doc) != nil {
-		return json.RawMessage(body)
-	}
-	var jobs []json.RawMessage
-	_ = json.Unmarshal(doc["jobs"], &jobs)
-	for _, job := range jobs {
-		var item struct {
-			ID int64 `json:"id"`
-		}
-		if json.Unmarshal(job, &item) == nil && item.ID == id {
-			return job
-		}
-	}
-	return json.RawMessage(body)
 }

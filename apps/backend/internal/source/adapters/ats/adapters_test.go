@@ -75,11 +75,14 @@ func TestAshbyMapsPublicBoardPostings(t *testing.T) {
 
 func TestGitHubPaginatesAndExcludesPullRequests(t *testing.T) {
 	requests := 0
-	r := NewRegistry()
+	r := NewRegistryWithGitHubToken("test-github-token")
 	r.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requests++
 		if req.URL.Path != "/repos/hireradar/jobs/issues" || req.URL.Query().Get("state") != "open" || req.Header.Get("User-Agent") == "" {
 			t.Fatalf("unexpected GitHub request: %s", req.URL)
+		}
+		if req.Header.Get("Authorization") != "Bearer test-github-token" {
+			t.Fatalf("authorization header = %q", req.Header.Get("Authorization"))
 		}
 		if req.URL.Query().Get("labels") != "hiring,backend" {
 			t.Fatalf("labels = %q", req.URL.Query().Get("labels"))
@@ -101,6 +104,15 @@ func TestGitHubPaginatesAndExcludesPullRequests(t *testing.T) {
 	}
 }
 
+func TestGitHubIssueJobClassifierKeepsPostingsAndSkipsBugs(t *testing.T) {
+	if !IsJobPosting("Hiring: Senior Go Engineer", "Remote worldwide. Apply with your CV.") {
+		t.Fatal("expected hiring issue to be a job posting")
+	}
+	if IsJobPosting("Fix engineer settings page", "The developer console crashes when opening settings.") {
+		t.Fatal("software bug issue was classified as a vacancy")
+	}
+}
+
 func TestRejectsBadBoardAndNonSuccessfulResponse(t *testing.T) {
 	r := NewRegistry()
 	if _, err := r.Fetch(context.Background(), domain.Source{Type: domain.Greenhouse, Config: []byte(`{"board":"../private"}`)}); err == nil {
@@ -111,6 +123,41 @@ func TestRejectsBadBoardAndNonSuccessfulResponse(t *testing.T) {
 	})
 	if _, err := r.Fetch(context.Background(), domain.Source{Type: domain.Greenhouse, Config: []byte(`{"board":"acme"}`)}); err == nil || !strings.Contains(err.Error(), "HTTP 429") {
 		t.Fatalf("expected HTTP error, got %v", err)
+	}
+}
+
+func TestATSBoardsDistinguishValidEmptySnapshotsFromInvalidPayloads(t *testing.T) {
+	tests := []struct {
+		name    string
+		typ     domain.Type
+		config  string
+		path    string
+		body    string
+		wantErr bool
+	}{
+		{name: "empty greenhouse board", typ: domain.Greenhouse, config: `{"board":"acme"}`, path: "/v1/boards/acme/jobs", body: `{"jobs":[]}`},
+		{name: "invalid greenhouse payload", typ: domain.Greenhouse, config: `{"board":"acme"}`, path: "/v1/boards/acme/jobs", body: `{"message":"not a board"}`, wantErr: true},
+		{name: "empty ashby board", typ: domain.Ashby, config: `{"board":"acme"}`, path: "/posting-api/job-board/acme", body: `{"jobs":[]}`},
+		{name: "invalid ashby payload", typ: domain.Ashby, config: `{"board":"acme"}`, path: "/posting-api/job-board/acme", body: `{"jobs":null}`, wantErr: true},
+		{name: "invalid lever payload", typ: domain.Lever, config: `{"board":"acme","page_size":1}`, path: "/v0/postings/acme", body: `null`, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := NewRegistry()
+			r.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != test.path {
+					t.Fatalf("unexpected path %s", req.URL.Path)
+				}
+				return response(test.body), nil
+			})
+			got, err := r.Fetch(context.Background(), domain.Source{Type: test.typ, CompanyName: "Acme", Config: []byte(test.config)})
+			if test.wantErr && err == nil {
+				t.Fatal("expected invalid payload error")
+			}
+			if !test.wantErr && (err != nil || len(got.Jobs) != 0) {
+				t.Fatalf("valid empty snapshot returned jobs=%d err=%v", len(got.Jobs), err)
+			}
+		})
 	}
 }
 
