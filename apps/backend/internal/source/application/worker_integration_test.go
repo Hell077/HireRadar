@@ -53,6 +53,16 @@ func TestSourceWorkerPersistsReplayableSnapshotsAndIsolatesFailures(t *testing.T
 	if err := w.syncSource(ctx, domain.Source{ID: sourceID, SyncIntervalSecond: 900}); err != nil {
 		t.Fatal(err)
 	}
+	if err := NewWorker(pool, fixtureFetcher{err: context.DeadlineExceeded}, 1).syncSource(ctx, domain.Source{ID: sourceID}); err == nil {
+		t.Fatal("expected failed refresh")
+	}
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT j.status FROM jobs j JOIN job_sources js ON js.job_id=j.id WHERE js.source_id=$1 AND js.external_id='posting-1'`, sourceID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "active" {
+		t.Fatalf("failed source refresh changed job lifecycle to %q", status)
+	}
 	job.Description = "Updated"
 	job.Raw = json.RawMessage(`{"id":"posting-1","description":"Updated"}`)
 	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{job}}}
