@@ -107,6 +107,10 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+      args:
+        VERSION: ${HIRERADAR_VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
     image: hireradar-backend:local
     environment: *backend-env
     ports:

@@ -103,6 +103,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		app.Use("/api/v1/auth", rateLimitAuth(auth[0].Limiter))
 	}
 	api := humafiber.New(app, huma.DefaultConfig("HireRadar API", "0.1.0"))
+	registerVersion(api)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "health-check",
