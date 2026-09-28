@@ -106,12 +106,12 @@ func TestResumeAnalysisAndSuggestionReviewIntegration(t *testing.T) {
 	if err != nil || !found || job.Resume.ID != domain.ID(resumeID) {
 		t.Fatalf("claim = %+v found=%v err=%v", job, found, err)
 	}
-	parsed := domain.ParsedResume{ResumeID: domain.ID(resumeID), Text: "Senior Go developer with 5 years experience", Skills: []domain.DetectedSkill{{Name: "Go", Confidence: .92}}, Positions: []domain.DetectedPosition{{Title: "Senior Go developer", Confidence: .62}}, TotalExperienceMonths: 60}
+	parsed := domain.ParsedResume{ResumeID: domain.ID(resumeID), Text: "Senior Go developer with 5 years experience", Skills: []domain.DetectedSkill{{Name: "Go", Confidence: .92}}, Positions: []domain.DetectedPosition{{Title: "Senior Go developer", Confidence: .62}}, Languages: []string{"en", "ru"}, TotalExperienceMonths: 60}
 	if err := store.SaveAnalysis(ctx, job, parsed); err != nil {
 		t.Fatal(err)
 	}
 	loaded, suggestions, err := store.Analysis(ctx, user.UserID(userID), domain.ID(resumeID))
-	if err != nil || loaded.Text != parsed.Text || len(suggestions) != 2 {
+	if err != nil || loaded.Text != parsed.Text || len(suggestions) != 2 || len(loaded.Languages) != 2 || loaded.Languages[0] != "en" {
 		t.Fatalf("analysis=%+v suggestions=%+v err=%v", loaded, suggestions, err)
 	}
 	var skillSuggestion, positionSuggestion string
@@ -141,7 +141,7 @@ func TestResumeAnalysisAndSuggestionReviewIntegration(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE event_type='profile.changed' AND aggregate_id=$1`, userID).Scan(&profileEvents); err != nil {
 		t.Fatal(err)
 	}
-	if skills != 1 || positions != 0 || profileEvents != 1 {
+	if skills != 1 || positions != 0 || profileEvents != 2 {
 		t.Fatalf("accepted skills=%d positions=%d profile events=%d", skills, positions, profileEvents)
 	}
 }

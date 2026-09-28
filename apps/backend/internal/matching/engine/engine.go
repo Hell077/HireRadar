@@ -12,6 +12,7 @@ type Candidate struct {
 	Profile     profiledomain.Profile
 	Skills      []profiledomain.Skill
 	Positions   []string
+	Languages   []string
 	Preferences profiledomain.Preferences
 	Weights     *Weights
 }
@@ -48,6 +49,12 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 	}
 	if job.Status != jobdomain.Active {
 		exclude("job_not_active")
+	}
+	if isSoftwareCandidate(candidate) && isClearlyNonSoftwareRole(job.Title) {
+		exclude("role_mismatch")
+	}
+	if len(candidate.Languages) > 0 && hasLanguageMismatch(candidate.Languages, job.Title+"\n"+job.Description) {
+		exclude("language_mismatch")
 	}
 	if job.Eligibility == jobdomain.NotEligible && candidate.Profile.Country == "KZ" {
 		exclude("country_not_eligible")

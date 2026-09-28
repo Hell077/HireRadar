@@ -57,6 +57,13 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO user_positions(id,user_id,title,normalized_title) VALUES($1,$2,'Backend Engineer','backend engineer')`, uuid.NewString(), userID); err != nil {
 		t.Fatal(err)
 	}
+	resumeID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO resumes(id,user_id,file_name,object_key,size,status) VALUES($1,$2,'resume.pdf',$3,100,'processed')`, resumeID, userID, "users/"+userID+"/resume.pdf"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO parsed_resumes(resume_id,extracted_text,positions,languages) VALUES($1,'Languages: Russian native, English fluent','[{"title":"Senior Go Developer"}]','["en","ru"]')`, resumeID); err != nil {
+		t.Fatal(err)
+	}
 	goodID, rejectedID := uuid.NewString(), uuid.NewString()
 	insertJob := func(id, title, country, eligibility string) {
 		t.Helper()
@@ -74,6 +81,10 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := application.NewService(NewStore(pool), time.Now)
+	candidate, err := NewStore(pool).LoadCandidate(ctx, user.UserID(userID))
+	if err != nil || !hasCandidatePosition(candidate.Positions, "Senior Go Developer") || !hasCandidateLanguage(candidate.Languages, "en") || !hasCandidateLanguage(candidate.Languages, "ru") {
+		t.Fatalf("resume matching signals were not loaded: candidate=%+v err=%v", candidate, err)
+	}
 	results, err := service.Refresh(ctx, user.UserID(userID))
 	if err != nil {
 		t.Fatal(err)
@@ -167,4 +178,22 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("stale match was not cleared: %+v err=%v", listed, err)
 	}
+}
+
+func hasCandidatePosition(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCandidateLanguage(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }

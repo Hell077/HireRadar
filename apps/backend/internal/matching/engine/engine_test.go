@@ -47,6 +47,49 @@ func TestEvaluateKeepsUnknownEvidenceNeutral(t *testing.T) {
 	}
 }
 
+func TestEvaluateExcludesUnrelatedOccupationsForSoftwareCandidate(t *testing.T) {
+	now := time.Now().UTC()
+	candidate := Candidate{
+		Skills:      []profiledomain.Skill{{Name: "Go"}, {Name: "JavaScript"}},
+		Positions:   []string{"Senior Backend Developer"},
+		Preferences: profiledomain.Preferences{MaximumJobAgeDays: 30},
+	}
+	for _, title := range []string{
+		"Barista", "咖啡师", "バリスタ", "Implementation Project Manager - Mortgage",
+		"Corporate Communications Manager", "Manager, Tech & Ecosystem Partnerships",
+		"Technical Account Manager", "Head of Paid Social, Insurance",
+		"3D & LiDAR Data Annotation Analyst", "Senior Visual Designer - Advertising",
+	} {
+		job := jobdomain.Job{ID: title, Title: title, Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now}
+		got := Evaluate(candidate, job, now)
+		if got.Eligible || !contains(got.Exclusions, "role_mismatch") || len(got.Components) != 0 {
+			t.Errorf("unrelated role %q was not rejected before scoring: %+v", title, got)
+		}
+	}
+	job := jobdomain.Job{ID: "tech", Title: "Senior Go Engineer", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now}
+	if got := Evaluate(candidate, job, now); !got.Eligible {
+		t.Fatalf("technical role should remain eligible: %+v", got)
+	}
+}
+
+func TestEvaluateFiltersRequiredAndPrimaryJobLanguages(t *testing.T) {
+	now := time.Now().UTC()
+	candidate := Candidate{Languages: []string{"en", "ru"}, Preferences: profiledomain.Preferences{MaximumJobAgeDays: 30}}
+	for _, job := range []jobdomain.Job{
+		{ID: "required-spanish", Title: "Backend Engineer", Description: "Fluent Spanish is required for this role.", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now},
+		{ID: "chinese-post", Title: "软件工程师", Description: "我们正在招聘软件工程师，负责开发和维护云平台。候选人需要丰富的工程经验，并与团队合作。", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now},
+	} {
+		got := Evaluate(candidate, job, now)
+		if got.Eligible || !contains(got.Exclusions, "language_mismatch") {
+			t.Errorf("unsupported job language was not rejected: %+v", got)
+		}
+	}
+	optional := jobdomain.Job{ID: "optional-spanish", Title: "Backend Engineer", Description: "Spanish is a plus. This is an English language posting about software engineering.", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now}
+	if got := Evaluate(candidate, optional, now); !got.Eligible {
+		t.Fatalf("optional language mention should not reject a job: %+v", got)
+	}
+}
+
 func TestWeightsAreValidatedAndConfigurable(t *testing.T) {
 	custom := Weights{Skills: 70, Position: 10, Seniority: 10, Location: 5, Salary: 5}
 	if !custom.Valid() || (Weights{Skills: 99}).Valid() {

@@ -42,3 +42,10 @@ func TestAnalyzeMatchesWholeSkillTerms(t *testing.T) {
 		t.Fatalf("partial skill match: %+v", parsed.Skills)
 	}
 }
+
+func TestAnalyzeExtractsLanguagesFromResumeSection(t *testing.T) {
+	parsed := Analyze("id", "Senior backend developer\nLanguages: Russian (native), English — fluent\nExperience: Worked with Spanish customers", nil)
+	if len(parsed.Languages) != 2 || parsed.Languages[0] != "en" || parsed.Languages[1] != "ru" {
+		t.Fatalf("languages = %v", parsed.Languages)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Hell077/HireRadar/apps/backend/internal/language"
 	"github.com/Hell077/HireRadar/apps/backend/internal/resume/domain"
 	pdf "github.com/giraffesyo/pdf"
 )
@@ -64,7 +65,7 @@ func ExtractText(ctx context.Context, data []byte) (string, error) {
 
 func Analyze(resumeID domain.ID, text string, vocabulary []SkillTerm) domain.ParsedResume {
 	lines := strings.Split(text, "\n")
-	result := domain.ParsedResume{ResumeID: resumeID, Text: text, Skills: []domain.DetectedSkill{}, Positions: []domain.DetectedPosition{}}
+	result := domain.ParsedResume{ResumeID: resumeID, Text: text, Skills: []domain.DetectedSkill{}, Positions: []domain.DetectedPosition{}, Languages: language.ResumeLanguages(text)}
 	seenSkills := map[string]bool{}
 	for _, term := range vocabulary {
 		canonical := strings.ToLower(term.Name)

@@ -20,6 +20,7 @@ type ParsedResume struct {
 	Text                  string             `json:"text,omitempty"`
 	Skills                []DetectedSkill    `json:"skills"`
 	Positions             []DetectedPosition `json:"positions"`
+	Languages             []string           `json:"languages"`
 	TotalExperienceMonths int                `json:"total_experience_months"`
 }
 

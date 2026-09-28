@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
+	"github.com/Hell077/HireRadar/apps/backend/internal/language"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	profiledomain "github.com/Hell077/HireRadar/apps/backend/internal/profile/domain"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
@@ -64,6 +66,36 @@ func (s *Store) LoadCandidate(ctx context.Context, userID user.UserID) (engine.C
 		return engine.Candidate{}, err
 	}
 	rows.Close()
+	var parsedPositionsJSON, languagesJSON []byte
+	var extractedResumeText string
+	err = s.pool.QueryRow(ctx, `SELECT p.positions,p.languages,p.extracted_text
+		FROM parsed_resumes p JOIN resumes r ON r.id=p.resume_id
+		WHERE r.user_id=$1 AND r.status='processed'
+		ORDER BY p.created_at DESC LIMIT 1`, string(userID)).Scan(&parsedPositionsJSON, &languagesJSON, &extractedResumeText)
+	if err != nil && err != pgx.ErrNoRows {
+		return engine.Candidate{}, fmt.Errorf("load resume matching signals: %w", err)
+	}
+	if err == nil {
+		var resumePositions []struct {
+			Title string `json:"title"`
+		}
+		if err := json.Unmarshal(parsedPositionsJSON, &resumePositions); err != nil {
+			return engine.Candidate{}, fmt.Errorf("decode resume positions for matching: %w", err)
+		}
+		for _, position := range resumePositions {
+			if position.Title != "" && !containsPosition(candidate.Positions, position.Title) {
+				candidate.Positions = append(candidate.Positions, position.Title)
+			}
+		}
+		if err := json.Unmarshal(languagesJSON, &candidate.Languages); err != nil {
+			return engine.Candidate{}, fmt.Errorf("decode resume languages for matching: %w", err)
+		}
+		// Existing analyses predate persisted language extraction. Derive their
+		// explicit language section from stored text until the CV is uploaded again.
+		if len(candidate.Languages) == 0 {
+			candidate.Languages = language.ResumeLanguages(extractedResumeText)
+		}
+	}
 	var minimum sql.NullInt64
 	var currency string
 	err = s.pool.QueryRow(ctx, `SELECT remote_policies,employment_types,allowed_regions,excluded_countries,minimum_salary_amount,minimum_salary_currency,minimum_match_score,maximum_job_age_days FROM job_preferences WHERE user_id=$1`, string(userID)).Scan(&candidate.Preferences.RemotePolicies, &candidate.Preferences.EmploymentTypes, &candidate.Preferences.AllowedRegions, &candidate.Preferences.ExcludedCountries, &minimum, &currency, &candidate.Preferences.MinimumMatchScore, &candidate.Preferences.MaximumJobAgeDays)
@@ -74,6 +106,15 @@ func (s *Store) LoadCandidate(ctx context.Context, userID user.UserID) (engine.C
 		candidate.Preferences.MinimumSalary = &profiledomain.Money{Amount: minimum.Int64, Currency: currency}
 	}
 	return candidate, nil
+}
+
+func containsPosition(values []string, value string) bool {
+	for _, item := range values {
+		if strings.EqualFold(strings.TrimSpace(item), strings.TrimSpace(value)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) CandidateJobs(ctx context.Context, userID user.UserID, candidate engine.Candidate) ([]jobdomain.Job, error) {

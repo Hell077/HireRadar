@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Hell077/HireRadar/apps/backend/internal/language"
 	resumeapp "github.com/Hell077/HireRadar/apps/backend/internal/resume/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/resume/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/resume/processing"
@@ -187,13 +188,17 @@ func (s *Store) SaveAnalysis(ctx context.Context, job resumeapp.ProcessingJob, p
 	if err != nil {
 		return fmt.Errorf("encode parsed positions: %w", err)
 	}
+	languages, err := json.Marshal(parsed.Languages)
+	if err != nil {
+		return fmt.Errorf("encode parsed languages: %w", err)
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin parsed resume save: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	_, err = tx.Exec(ctx, `INSERT INTO parsed_resumes (resume_id,extracted_text,skills,positions,total_experience_months)
-		VALUES ($1,$2,$3,$4,$5) ON CONFLICT (resume_id) DO UPDATE SET extracted_text=EXCLUDED.extracted_text,skills=EXCLUDED.skills,positions=EXCLUDED.positions,total_experience_months=EXCLUDED.total_experience_months,created_at=now()`, string(job.Resume.ID), parsed.Text, skills, positions, parsed.TotalExperienceMonths)
+	_, err = tx.Exec(ctx, `INSERT INTO parsed_resumes (resume_id,extracted_text,skills,positions,languages,total_experience_months)
+		VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (resume_id) DO UPDATE SET extracted_text=EXCLUDED.extracted_text,skills=EXCLUDED.skills,positions=EXCLUDED.positions,languages=EXCLUDED.languages,total_experience_months=EXCLUDED.total_experience_months,created_at=now()`, string(job.Resume.ID), parsed.Text, skills, positions, languages, parsed.TotalExperienceMonths)
 	if err != nil {
 		return fmt.Errorf("store parsed resume: %w", err)
 	}
@@ -224,6 +229,9 @@ func (s *Store) SaveAnalysis(ctx context.Context, job resumeapp.ProcessingJob, p
 	if _, err := tx.Exec(ctx, `INSERT INTO outbox_events (id,event_type,aggregate_type,aggregate_id,payload) VALUES ($1,'resume.processed','resume',$2,jsonb_build_object('resume_id',$2::text,'user_id',$3::text))`, uuid.NewString(), string(job.Resume.ID), string(job.Resume.UserID)); err != nil {
 		return fmt.Errorf("publish resume processed: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO outbox_events (id,event_type,aggregate_type,aggregate_id,payload) VALUES ($1,'profile.changed','user',$2,jsonb_build_object('user_id',$2::text,'reason','resume_analysis'))`, uuid.NewString(), string(job.Resume.UserID)); err != nil {
+		return fmt.Errorf("publish resume profile signals: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit parsed resume: %w", err)
 	}
@@ -251,7 +259,8 @@ func (s *Store) Analysis(ctx context.Context, userID user.UserID, id domain.ID) 
 	var result domain.ParsedResume
 	result.ResumeID = id
 	var skillsJSON, positionsJSON []byte
-	err := s.pool.QueryRow(ctx, `SELECT p.extracted_text,p.skills,p.positions,p.total_experience_months FROM parsed_resumes p JOIN resumes r ON r.id=p.resume_id WHERE r.id=$1 AND r.user_id=$2 AND r.status<>'deleted'`, string(id), string(userID)).Scan(&result.Text, &skillsJSON, &positionsJSON, &result.TotalExperienceMonths)
+	var languagesJSON []byte
+	err := s.pool.QueryRow(ctx, `SELECT p.extracted_text,p.skills,p.positions,p.languages,p.total_experience_months FROM parsed_resumes p JOIN resumes r ON r.id=p.resume_id WHERE r.id=$1 AND r.user_id=$2 AND r.status<>'deleted'`, string(id), string(userID)).Scan(&result.Text, &skillsJSON, &positionsJSON, &languagesJSON, &result.TotalExperienceMonths)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		if checkErr := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM resumes WHERE id=$1 AND user_id=$2 AND status<>'deleted')`, string(id), string(userID)).Scan(&exists); checkErr != nil {
@@ -270,6 +279,12 @@ func (s *Store) Analysis(ctx context.Context, userID user.UserID, id domain.ID) 
 	}
 	if err := json.Unmarshal(positionsJSON, &result.Positions); err != nil {
 		return domain.ParsedResume{}, nil, fmt.Errorf("decode parsed positions: %w", err)
+	}
+	if err := json.Unmarshal(languagesJSON, &result.Languages); err != nil {
+		return domain.ParsedResume{}, nil, fmt.Errorf("decode parsed languages: %w", err)
+	}
+	if len(result.Languages) == 0 {
+		result.Languages = language.ResumeLanguages(result.Text)
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id::text,resume_id::text,kind,value,confidence,status FROM resume_suggestions WHERE resume_id=$1 AND user_id=$2 ORDER BY kind,normalized_value`, string(id), string(userID))
 	if err != nil {
