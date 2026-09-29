@@ -65,7 +65,13 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 	if intersects(job.Countries, candidate.Preferences.ExcludedCountries) {
 		exclude("excluded_country")
 	}
-	if len(candidate.Preferences.RemotePolicies) > 0 && !contains(candidate.Preferences.RemotePolicies, string(job.RemotePolicy)) {
+	remotePolicyMatches := contains(candidate.Preferences.RemotePolicies, string(job.RemotePolicy))
+	// Generic remote listings without an explicit country restriction fit a
+	// worldwide preference; explicit country limits are checked above.
+	if contains(candidate.Preferences.RemotePolicies, "worldwide") && job.RemotePolicy == jobdomain.Remote && len(job.Countries) == 0 {
+		remotePolicyMatches = true
+	}
+	if len(candidate.Preferences.RemotePolicies) > 0 && !remotePolicyMatches {
 		exclude("remote_policy_mismatch")
 	}
 	if len(candidate.Preferences.AllowedRegions) > 0 {

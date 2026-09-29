@@ -38,6 +38,22 @@ func TestEvaluateAppliesHardFiltersBeforeScoring(t *testing.T) {
 	}
 }
 
+func TestWorldwidePreferenceAcceptsUnrestrictedRemoteButNotCountryLimitedListings(t *testing.T) {
+	now := time.Now().UTC()
+	candidate := Candidate{Profile: profiledomain.Profile{Country: "KZ"}, Preferences: profiledomain.Preferences{RemotePolicies: []string{"worldwide"}, MaximumJobAgeDays: 30}}
+	job := jobdomain.Job{ID: "generic-remote", Title: "Go Engineer", Status: jobdomain.Active, RemotePolicy: jobdomain.Remote, Eligibility: jobdomain.EligibilityUnknown, FirstSeenAt: now}
+	if got := Evaluate(candidate, job, now); !got.Eligible {
+		t.Fatalf("unrestricted generic remote job should fit worldwide preference: %+v", got)
+	}
+	job.ID = "us-only"
+	job.Countries = []string{"US"}
+	job.Location = "US Remote"
+	job.Eligibility = jobdomain.NotEligible
+	if got := Evaluate(candidate, job, now); got.Eligible || !contains(got.Exclusions, "country_not_eligible") {
+		t.Fatalf("country-limited US job must not fit Kazakhstan profile: %+v", got)
+	}
+}
+
 func TestEvaluateKeepsUnknownEvidenceNeutral(t *testing.T) {
 	now := time.Now().UTC()
 	job := jobdomain.Job{ID: "job-3", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, Seniority: jobdomain.SeniorityUnknown, FirstSeenAt: now}
