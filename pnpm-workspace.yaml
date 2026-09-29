@@ -4,3 +4,5 @@ packages:
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
+overrides:
+  nanoid: ^3.3.18

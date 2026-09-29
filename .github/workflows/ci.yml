@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: hireradar
+          POSTGRES_PASSWORD: hireradar
+          POSTGRES_DB: hireradar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hireradar -d hireradar_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://hireradar:hireradar@localhost:5432/hireradar_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://hireradar:hireradar@localhost:5432/hireradar_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/backend/go.mod
+          cache-dependency-path: apps/backend/go.sum
+      - name: Check formatting
+        working-directory: apps/backend
+        run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
+      - name: Vet
+        working-directory: apps/backend
+        run: go vet ./...
+      - name: Apply migrations
+        working-directory: apps/backend
+        run: go run ./cmd/migrate
+      - name: Test
+        working-directory: apps/backend
+        # Integration-test packages share TEST_DATABASE_URL and exercise queue workers.
+        # Serialize packages so one fixture's worker cannot claim another fixture's events.
+        run: go test -p 1 ./...
+      - name: Race tests
+        working-directory: apps/backend
+        run: go test -race -p 1 ./...
+      - name: Build
+        working-directory: apps/backend
+        run: go build ./...
+      - name: Vulnerability check
+        working-directory: apps/backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm check-types
+      - run: pnpm build
+      - run: pnpm audit --prod
+
+  generated-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/backend/go.mod
+          cache-dependency-path: apps/backend/go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen:client
+      - name: Verify generated types
+        run: git diff --exit-code -- apps/web/lib/api/generated.ts

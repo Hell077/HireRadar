@@ -1,4 +1,38 @@
 export interface paths {
+    "/api/v1/admin/applications/failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List failed applications */
+        get: operations["admin-applications-failed-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/applications/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed application */
+        post: operations["admin-application-retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/discovery": {
         parameters: {
             query?: never;
@@ -27,6 +61,40 @@ export interface paths {
         put?: never;
         /** Schedule a source discovery run */
         post: operations["admin-discovery-run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/outbox/failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List failed outbox events */
+        get: operations["admin-outbox-failed-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/outbox/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed outbox event */
+        post: operations["admin-outbox-retry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -129,6 +197,126 @@ export interface paths {
         put?: never;
         /** Schedule a source sync */
         post: operations["admin-source-sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/application-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get application profile */
+        get: operations["application-profile-get"];
+        /** Update application profile */
+        put: operations["application-profile-put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/application-questions/{id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer an application question */
+        post: operations["application-question-answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List applications */
+        get: operations["applications-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get application status */
+        get: operations["applications-get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an application */
+        post: operations["application-cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List application questions */
+        get: operations["application-questions-list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a failed application */
+        post: operations["application-retry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -325,6 +513,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a job application */
+        post: operations["job-apply-request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/matches": {
         parameters: {
             query?: never;
@@ -356,6 +561,23 @@ export interface paths {
          * @description Only jobs that pass hard eligibility and preference filters are scored and saved.
          */
         post: operations["matches-refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/open/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Record a notification open and redirect to the application */
+        get: operations["notification-open"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -750,6 +972,24 @@ export interface components {
             id: string;
             status: string;
         };
+        AdminFailedApplicationsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminFailedApplicationsOutputBody.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["FailedApplication"][] | null;
+        };
+        AdminFailedOutboxOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminFailedOutboxOutputBody.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["FailedEvent"][] | null;
+        };
         AdminOperationOutputBody: {
             /**
              * Format: uri
@@ -757,6 +997,16 @@ export interface components {
              * @example https://example.com/schemas/AdminOperationOutputBody.json
              */
             readonly $schema?: string;
+            status: string;
+        };
+        AdminRetryOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminRetryOutputBody.json
+             */
+            readonly $schema?: string;
+            id: string;
             status: string;
         };
         AdminServiceActionOutputBody: {
@@ -787,6 +1037,102 @@ export interface components {
             readonly $schema?: string;
             sources: components["schemas"]["Source"][] | null;
         };
+        Application: {
+            /** Format: int64 */
+            attempts: number;
+            id: string;
+            job_id: string;
+            provider: string;
+            /** Format: date-time */
+            requested_at: string;
+            status: string;
+            /** Format: date-time */
+            submitted_at?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ApplicationAnswerInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ApplicationAnswerInputBody.json
+             */
+            readonly $schema?: string;
+            answer: string;
+        };
+        ApplicationMoney: {
+            /** Format: int64 */
+            amount: number;
+            currency: string;
+        };
+        ApplicationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ApplicationOutputBody.json
+             */
+            readonly $schema?: string;
+            application: components["schemas"]["Application"];
+        };
+        ApplicationProfile: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ApplicationProfile.json
+             */
+            readonly $schema?: string;
+            address: string;
+            city: string;
+            country: string;
+            custom_answers: {
+                [key: string]: string;
+            };
+            email: string;
+            expected_salary?: components["schemas"]["ApplicationMoney"];
+            first_name: string;
+            github_url: string;
+            last_name: string;
+            /** Format: double */
+            latitude?: number;
+            linkedin_url: string;
+            /** Format: double */
+            longitude?: number;
+            /** Format: int64 */
+            notice_period_days?: number;
+            phone: string;
+            resume_id?: string;
+            website_url: string;
+            work_authorization: components["schemas"]["WorkAuthorization"][] | null;
+        };
+        ApplicationQuestion: {
+            answer?: unknown;
+            application_id: string;
+            external_key?: string;
+            id: string;
+            options?: components["schemas"]["Option"][] | null;
+            question: string;
+            question_type: string;
+            required: boolean;
+            status: string;
+        };
+        ApplicationQuestionsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ApplicationQuestionsOutputBody.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["ApplicationQuestion"][] | null;
+        };
+        ApplicationsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ApplicationsOutputBody.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["Application"][] | null;
+        };
         CallbackQueryStruct: {
             data: string;
             from: components["schemas"]["FromStruct1"];
@@ -800,7 +1146,13 @@ export interface components {
         Component: {
             code: string;
             /** Format: int64 */
+            confidence: number;
+            matched?: string[] | null;
+            missing_preferred?: string[] | null;
+            missing_required?: string[] | null;
+            /** Format: int64 */
             score: number;
+            unknown?: string[] | null;
             /** Format: int64 */
             weight: number;
         };
@@ -817,6 +1169,13 @@ export interface components {
         DetectedSkill: {
             /** Format: double */
             confidence: number;
+            current?: boolean;
+            /** Format: int64 */
+            estimated_experience_months?: number;
+            /** Format: date-time */
+            first_used?: string;
+            /** Format: date-time */
+            last_used?: string;
             name: string;
         };
         DiscoverySourceStatus: {
@@ -886,6 +1245,41 @@ export interface components {
              */
             type: string;
         };
+        Experience: {
+            company?: string;
+            /** Format: double */
+            confidence: number;
+            current: boolean;
+            /** Format: date-time */
+            end_date?: string;
+            skills: components["schemas"]["DetectedSkill"][] | null;
+            /** Format: date-time */
+            start_date?: string;
+            title: string;
+        };
+        FailedApplication: {
+            /** Format: int64 */
+            attempts: number;
+            company: string;
+            error_code?: string;
+            id: string;
+            job_id: string;
+            provider: string;
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FailedEvent: {
+            aggregate_id: string;
+            aggregate_type: string;
+            /** Format: int64 */
+            attempts: number;
+            event_type: string;
+            /** Format: date-time */
+            failed_at: string;
+            id: string;
+        };
         FromStruct: {
             /** Format: int64 */
             id: number;
@@ -923,15 +1317,25 @@ export interface components {
             /** Format: date-time */
             first_seen_at: string;
             id: string;
+            job_family: string;
+            /** Format: double */
+            job_family_confidence: number;
+            job_speciality: string;
             /** Format: date-time */
             last_seen_at: string;
             location: string;
+            /** Format: double */
+            location_confidence: number;
             normalized_title: string;
             /** Format: date-time */
             published_at?: string;
             remote_policy: string;
             salary?: components["schemas"]["SalaryRange"];
+            /** Format: double */
+            salary_confidence: number;
             seniority: string;
+            /** Format: double */
+            seniority_confidence: number;
             skills: components["schemas"]["JobSkill"][] | null;
             /** Format: int64 */
             source_priority: number;
@@ -949,11 +1353,16 @@ export interface components {
             readonly $schema?: string;
             /** @enum {string} */
             action: "hide" | "applied";
+            /** @enum {string} */
+            reason?: "wrong_stack" | "wrong_role" | "wrong_seniority" | "wrong_location" | "wrong_salary" | "wrong_company" | "duplicate" | "already_seen" | "not_interested" | "other";
         };
         JobSkill: {
             /** Format: double */
             confidence: number;
             id: string;
+            minimum_level?: string;
+            /** Format: double */
+            minimum_years?: number;
             name: string;
             required: boolean;
         };
@@ -1015,6 +1424,10 @@ export interface components {
             quiet_start?: string;
             timezone: string;
         };
+        Option: {
+            label: string;
+            value: unknown;
+        };
         Overview: {
             /**
              * Format: uri
@@ -1023,10 +1436,12 @@ export interface components {
              */
             readonly $schema?: string;
             candidate_states: components["schemas"]["Count"][] | null;
+            provider_coverage: components["schemas"]["ProviderCoverage"][] | null;
             providers: components["schemas"]["Count"][] | null;
             sources: components["schemas"]["DiscoverySourceStatus"][] | null;
         };
         ParsedResume: {
+            experiences: components["schemas"]["Experience"][] | null;
             languages: string[] | null;
             positions: components["schemas"]["DetectedPosition"][] | null;
             resume_id: string;
@@ -1088,6 +1503,12 @@ export interface components {
             seniority: string;
             timezone: string;
         };
+        ProviderCoverage: {
+            /** Format: int64 */
+            count: number;
+            provider: string;
+            status: string;
+        };
         RefreshInputBody: {
             /**
              * Format: uri
@@ -1137,6 +1558,8 @@ export interface components {
         };
         Result: {
             components: components["schemas"]["Component"][] | null;
+            /** Format: int64 */
+            confidence: number;
             eligible: boolean;
             exclusions: string[] | null;
             job_id: string;
@@ -1435,6 +1858,10 @@ export interface components {
             commit: string;
             version: string;
         };
+        WorkAuthorization: {
+            country: string;
+            status: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1444,6 +1871,72 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "admin-applications-failed-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFailedApplicationsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-application-retry": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRetryOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "admin-discovery-overview": {
         parameters: {
             query?: never;
@@ -1495,6 +1988,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminDiscoveryRunOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-outbox-failed-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFailedOutboxOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-outbox-retry": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Operator-Token"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRetryOutputBody"];
                 };
             };
             /** @description Error */
@@ -1694,6 +2253,268 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminOperationOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-profile-get": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationProfile"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-profile-put": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationProfile"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationProfile"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-question-answer": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationAnswerInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "applications-list": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "applications-get": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-cancel": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-questions-list": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationQuestionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "application-retry": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -2066,6 +2887,39 @@ export interface operations {
             };
         };
     };
+    "job-apply-request": {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "matches-list": {
         parameters: {
             query?: {
@@ -2119,6 +2973,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MatchesOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "notification-open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Found */
+            302: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
