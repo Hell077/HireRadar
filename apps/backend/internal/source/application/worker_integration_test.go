@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestSourceWorkerPersistsReplayableSnapshotsAndIsolatesFailures(t *testing.T
 	sourceID := "integration-" + uuid.NewString()
 	badID := "integration-" + uuid.NewString()
 	for _, id := range []string{sourceID, badID} {
-		if _, err := pool.Exec(ctx, `INSERT INTO sources(id,name,source_type,company_name,config,enabled) VALUES($1,$1,'greenhouse','Test','{"board":"test"}',false)`, id); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO sources(id,name,source_type,company_name,config,enabled) VALUES($1,$1,'greenhouse','Test',$2,false)`, id, fmt.Sprintf(`{"board":"%s"}`, id)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,7 +141,7 @@ func TestCatalogDeduplicatesSourcesAndDelaysClosure(t *testing.T) {
 	defer pool.Close()
 	primaryID, secondaryID := "catalog-"+uuid.NewString(), "catalog-"+uuid.NewString()
 	for _, id := range []string{primaryID, secondaryID} {
-		if _, err := pool.Exec(ctx, `INSERT INTO sources(id,name,source_type,company_name,config,enabled,priority) VALUES($1,$1,'greenhouse','Acme','{"board":"acme"}',false,100)`, id); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO sources(id,name,source_type,company_name,config,enabled,priority) VALUES($1,$1,'greenhouse','Acme',$2,false,100)`, id, fmt.Sprintf(`{"board":"%s"}`, id)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -191,7 +192,7 @@ func TestCatalogDeduplicatesSourcesAndDelaysClosure(t *testing.T) {
 		t.Fatalf("lower-priority mirror replaced official data: url=%q description=%q", canonicalURL, description)
 	}
 	// One successful absence does not close a job; the other source still lists it.
-	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}}}
+	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, AuthoritativeSnapshot: true}}
 	for range 2 {
 		if err := w.syncSource(ctx, primary); err != nil {
 			t.Fatal(err)

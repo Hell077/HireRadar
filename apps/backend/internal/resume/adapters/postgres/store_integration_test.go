@@ -106,12 +106,13 @@ func TestResumeAnalysisAndSuggestionReviewIntegration(t *testing.T) {
 	if err != nil || !found || job.Resume.ID != domain.ID(resumeID) {
 		t.Fatalf("claim = %+v found=%v err=%v", job, found, err)
 	}
-	parsed := domain.ParsedResume{ResumeID: domain.ID(resumeID), Text: "Senior Go developer with 5 years experience", Skills: []domain.DetectedSkill{{Name: "Go", Confidence: .92}}, Positions: []domain.DetectedPosition{{Title: "Senior Go developer", Confidence: .62}}, Languages: []string{"en", "ru"}, TotalExperienceMonths: 60}
+	startDate := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+	parsed := domain.ParsedResume{ResumeID: domain.ID(resumeID), Text: "Senior Go developer with 5 years experience", Skills: []domain.DetectedSkill{{Name: "Go", Confidence: .65, EstimatedExperienceMonths: 60, FirstUsed: &startDate, Current: true}}, Positions: []domain.DetectedPosition{{Title: "Senior Go developer", Confidence: .62}}, Experiences: []domain.Experience{{Company: "Acme", Title: "Senior Go developer", StartDate: &startDate, Current: true, Skills: []domain.DetectedSkill{{Name: "Go", Confidence: .65}}, Confidence: .65}}, Languages: []string{"en", "ru"}, TotalExperienceMonths: 60}
 	if err := store.SaveAnalysis(ctx, job, parsed); err != nil {
 		t.Fatal(err)
 	}
 	loaded, suggestions, err := store.Analysis(ctx, user.UserID(userID), domain.ID(resumeID))
-	if err != nil || loaded.Text != parsed.Text || len(suggestions) != 2 || len(loaded.Languages) != 2 || loaded.Languages[0] != "en" {
+	if err != nil || loaded.Text != parsed.Text || len(suggestions) != 2 || len(loaded.Languages) != 2 || loaded.Languages[0] != "en" || len(loaded.Experiences) != 1 || loaded.Experiences[0].Company != "Acme" || loaded.Skills[0].EstimatedExperienceMonths != 60 {
 		t.Fatalf("analysis=%+v suggestions=%+v err=%v", loaded, suggestions, err)
 	}
 	var skillSuggestion, positionSuggestion string

@@ -62,7 +62,8 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 	}
 	if !found {
 		jobID = uuid.NewString()
-		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,salary_min,salary_max,salary_currency,salary_period,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULLIF($17,''),$18,$19,'active',$20)`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority)
+		_, err = tx.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,salary_min,salary_max,salary_currency,salary_period,employment_types,remote_policy,location,location_countries,eligibility,apply_url,canonical_url,published_at,fingerprint,status,source_priority,job_family,job_speciality,job_family_confidence,seniority_confidence,location_confidence,salary_confidence)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULLIF($17,''),$18,$19,'active',$20,$21,$22,$23,$24,$25,$26)`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], source.Priority, job.Family, job.Speciality, job.FamilyConfidence, job.SeniorityConfidence, job.LocationConfidence, job.SalaryConfidence)
 		if err != nil {
 			return false, false, fmt.Errorf("insert normalized job: %w", err)
 		}
@@ -71,18 +72,19 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 		allowReplace := sameSource || source.Priority <= priority
 		if allowReplace {
 			var before struct {
-				title, description, location, applyURL       string
-				remotePolicy, eligibility, status, seniority string
-				currency, period                             *string
-				salaryMin, salaryMax                         *float64
-				employmentTypes, countries                   []string
-				publishedAt                                  *time.Time
+				title, description, location, applyURL                                      string
+				remotePolicy, eligibility, status, seniority, family, speciality            string
+				currency, period                                                            *string
+				salaryMin, salaryMax                                                        *float64
+				employmentTypes, countries                                                  []string
+				publishedAt                                                                 *time.Time
+				familyConfidence, seniorityConfidence, locationConfidence, salaryConfidence float32
 			}
-			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,seniority,employment_types,location_countries,published_at,salary_min,salary_max,salary_currency,salary_period FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.seniority, &before.employmentTypes, &before.countries, &before.publishedAt, &before.salaryMin, &before.salaryMax, &before.currency, &before.period); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT title,description,location,apply_url,remote_policy,eligibility,status,seniority,employment_types,location_countries,published_at,salary_min,salary_max,salary_currency,salary_period,job_family,job_speciality,job_family_confidence,seniority_confidence,location_confidence,salary_confidence FROM jobs WHERE id=$1 FOR UPDATE`, jobID).Scan(&before.title, &before.description, &before.location, &before.applyURL, &before.remotePolicy, &before.eligibility, &before.status, &before.seniority, &before.employmentTypes, &before.countries, &before.publishedAt, &before.salaryMin, &before.salaryMax, &before.currency, &before.period, &before.family, &before.speciality, &before.familyConfidence, &before.seniorityConfidence, &before.locationConfidence, &before.salaryConfidence); err != nil {
 				return false, false, err
 			}
-			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || before.seniority != string(job.Seniority) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt) || !sameSalary(before.salaryMin, before.salaryMax, before.currency, before.period, job.Salary)
-			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,seniority=$5,description=$6,salary_min=$7,salary_max=$8,salary_currency=$9,salary_period=$10,employment_types=$11,remote_policy=$12,location=$13,location_countries=$14,eligibility=$15,apply_url=$16,canonical_url=NULLIF($17,''),published_at=$18,fingerprint=$19,source_priority=$20,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $21 THEN now() ELSE updated_at END WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated)
+			updated = before.title != job.Title || before.description != job.Description || before.location != job.Location || before.applyURL != job.ApplyURL || before.remotePolicy != string(job.RemotePolicy) || before.eligibility != string(job.Eligibility) || before.status != string(jobdomain.Active) || before.seniority != string(job.Seniority) || before.family != job.Family || before.speciality != job.Speciality || before.familyConfidence != float32(job.FamilyConfidence) || before.seniorityConfidence != float32(job.SeniorityConfidence) || before.locationConfidence != float32(job.LocationConfidence) || before.salaryConfidence != float32(job.SalaryConfidence) || strings.Join(before.employmentTypes, "\x00") != strings.Join(job.EmploymentTypes, "\x00") || strings.Join(before.countries, "\x00") != strings.Join(job.Countries, "\x00") || !sameTime(before.publishedAt, job.PublishedAt) || !sameSalary(before.salaryMin, before.salaryMax, before.currency, before.period, job.Salary)
+			_, err = tx.Exec(ctx, `UPDATE jobs SET company_id=$2,title=$3,normalized_title=$4,seniority=$5,description=$6,salary_min=$7,salary_max=$8,salary_currency=$9,salary_period=$10,employment_types=$11,remote_policy=$12,location=$13,location_countries=$14,eligibility=$15,apply_url=$16,canonical_url=NULLIF($17,''),published_at=$18,fingerprint=$19,source_priority=$20,status='active',closed_at=NULL,last_seen_at=now(),updated_at=CASE WHEN $21 THEN now() ELSE updated_at END,job_family=$22,job_speciality=$23,job_family_confidence=$24,seniority_confidence=$25,location_confidence=$26,salary_confidence=$27 WHERE id=$1`, jobID, companyID, job.Title, job.NormalizedTitle, string(job.Seniority), job.Description, salaryValue(job.Salary, 0), salaryValue(job.Salary, 1), salaryValue(job.Salary, 2), salaryValue(job.Salary, 3), job.EmploymentTypes, string(job.RemotePolicy), job.Location, job.Countries, string(job.Eligibility), job.ApplyURL, canonical, job.PublishedAt, fingerprint[:], minPriority(priority, source.Priority), updated, job.Family, job.Speciality, job.FamilyConfidence, job.SeniorityConfidence, job.LocationConfidence, job.SalaryConfidence)
 			if err != nil {
 				return false, false, fmt.Errorf("update normalized job: %w", err)
 			}
@@ -120,35 +122,35 @@ func (i *Ingestor) Save(ctx context.Context, tx pgx.Tx, source sourcedomain.Sour
 	return created, updated, nil
 }
 
-func (i *Ingestor) CloseMissing(ctx context.Context, tx pgx.Tx, sourceID, runID string) error {
+func (i *Ingestor) CloseMissing(ctx context.Context, tx pgx.Tx, sourceID, runID string) (int, error) {
 	if _, err := tx.Exec(ctx, `UPDATE job_sources SET missing_count=missing_count+1,is_active=(missing_count+1<2) WHERE source_id=$1 AND is_active AND last_seen_run_id IS DISTINCT FROM $2`, sourceID, runID); err != nil {
-		return fmt.Errorf("increment missing job references: %w", err)
+		return 0, fmt.Errorf("increment missing job references: %w", err)
 	}
 	rows, err := tx.Query(ctx, `UPDATE jobs j SET status='closed',closed_at=now(),updated_at=now() WHERE j.status='active' AND EXISTS(SELECT 1 FROM job_sources js WHERE js.job_id=j.id AND js.source_id=$1 AND js.missing_count>=2 AND NOT js.is_active) AND NOT EXISTS(SELECT 1 FROM job_sources active WHERE active.job_id=j.id AND active.is_active) RETURNING j.id`, sourceID)
 	if err != nil {
-		return fmt.Errorf("close jobs missing from all sources: %w", err)
+		return 0, fmt.Errorf("close jobs missing from all sources: %w", err)
 	}
 	closedIDs := []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return err
+			return 0, err
 		}
 		closedIDs = append(closedIDs, id)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return err
+		return 0, err
 	}
 	rows.Close()
 	for _, id := range closedIDs {
 		payload, _ := json.Marshal(map[string]string{"job_id": id, "source_id": sourceID})
 		if _, err := tx.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'job.closed','job',$2,$3::jsonb)`, uuid.NewString(), id, payload); err != nil {
-			return fmt.Errorf("publish closed job event: %w", err)
+			return 0, fmt.Errorf("publish closed job event: %w", err)
 		}
 	}
-	return nil
+	return len(closedIDs), nil
 }
 
 func (i *Ingestor) company(ctx context.Context, tx pgx.Tx, name, key string) (string, error) {

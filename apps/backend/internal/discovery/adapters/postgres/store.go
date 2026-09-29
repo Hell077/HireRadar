@@ -344,7 +344,7 @@ func (s *Store) ScheduleRun(ctx context.Context, id string) error {
 }
 
 func (s *Store) Overview(ctx context.Context) (domain.Overview, error) {
-	out := domain.Overview{Sources: []domain.DiscoverySourceStatus{}, CandidateStates: []domain.Count{}, Providers: []domain.Count{}}
+	out := domain.Overview{Sources: []domain.DiscoverySourceStatus{}, CandidateStates: []domain.Count{}, Providers: []domain.Count{}, ProviderCoverage: []domain.ProviderCoverage{}}
 	rows, err := s.pool.Query(ctx, `SELECT d.id,d.name,d.repo_owner,d.repo_name,coalesce(d.last_status,''),coalesce(d.last_error,''),d.last_run_at,
 		coalesce(r.targets_seen,0),coalesce(r.candidates_created,0),coalesce(r.candidates_reused,0),coalesce(r.provenance_added,0),d.next_run_at
 		FROM discovery_sources d LEFT JOIN LATERAL (SELECT targets_seen,candidates_created,candidates_reused,provenance_added FROM discovery_runs WHERE discovery_source_id=d.id ORDER BY started_at DESC LIMIT 1) r ON true ORDER BY d.id`)
@@ -386,5 +386,22 @@ func (s *Store) Overview(ctx context.Context) (domain.Overview, error) {
 		}
 		rows.Close()
 	}
+	rows, err = s.pool.Query(ctx, `SELECT COALESCE(detected_provider,'unknown'),status,count(*) FROM source_candidates GROUP BY detected_provider,status ORDER BY detected_provider,status`)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var item domain.ProviderCoverage
+		if err := rows.Scan(&item.Provider, &item.Status, &item.Count); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.ProviderCoverage = append(out.ProviderCoverage, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return out, err
+	}
+	rows.Close()
 	return out, nil
 }

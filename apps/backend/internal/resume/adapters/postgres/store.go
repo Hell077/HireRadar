@@ -192,13 +192,17 @@ func (s *Store) SaveAnalysis(ctx context.Context, job resumeapp.ProcessingJob, p
 	if err != nil {
 		return fmt.Errorf("encode parsed languages: %w", err)
 	}
+	experiences, err := json.Marshal(parsed.Experiences)
+	if err != nil {
+		return fmt.Errorf("encode parsed experiences: %w", err)
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin parsed resume save: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	_, err = tx.Exec(ctx, `INSERT INTO parsed_resumes (resume_id,extracted_text,skills,positions,languages,total_experience_months)
-		VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (resume_id) DO UPDATE SET extracted_text=EXCLUDED.extracted_text,skills=EXCLUDED.skills,positions=EXCLUDED.positions,languages=EXCLUDED.languages,total_experience_months=EXCLUDED.total_experience_months,created_at=now()`, string(job.Resume.ID), parsed.Text, skills, positions, languages, parsed.TotalExperienceMonths)
+	_, err = tx.Exec(ctx, `INSERT INTO parsed_resumes (resume_id,extracted_text,skills,positions,languages,experiences,total_experience_months)
+		VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (resume_id) DO UPDATE SET extracted_text=EXCLUDED.extracted_text,skills=EXCLUDED.skills,positions=EXCLUDED.positions,languages=EXCLUDED.languages,experiences=EXCLUDED.experiences,total_experience_months=EXCLUDED.total_experience_months,created_at=now()`, string(job.Resume.ID), parsed.Text, skills, positions, languages, experiences, parsed.TotalExperienceMonths)
 	if err != nil {
 		return fmt.Errorf("store parsed resume: %w", err)
 	}
@@ -259,8 +263,8 @@ func (s *Store) Analysis(ctx context.Context, userID user.UserID, id domain.ID) 
 	var result domain.ParsedResume
 	result.ResumeID = id
 	var skillsJSON, positionsJSON []byte
-	var languagesJSON []byte
-	err := s.pool.QueryRow(ctx, `SELECT p.extracted_text,p.skills,p.positions,p.languages,p.total_experience_months FROM parsed_resumes p JOIN resumes r ON r.id=p.resume_id WHERE r.id=$1 AND r.user_id=$2 AND r.status<>'deleted'`, string(id), string(userID)).Scan(&result.Text, &skillsJSON, &positionsJSON, &languagesJSON, &result.TotalExperienceMonths)
+	var languagesJSON, experiencesJSON []byte
+	err := s.pool.QueryRow(ctx, `SELECT p.extracted_text,p.skills,p.positions,p.languages,p.experiences,p.total_experience_months FROM parsed_resumes p JOIN resumes r ON r.id=p.resume_id WHERE r.id=$1 AND r.user_id=$2 AND r.status<>'deleted'`, string(id), string(userID)).Scan(&result.Text, &skillsJSON, &positionsJSON, &languagesJSON, &experiencesJSON, &result.TotalExperienceMonths)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		if checkErr := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM resumes WHERE id=$1 AND user_id=$2 AND status<>'deleted')`, string(id), string(userID)).Scan(&exists); checkErr != nil {
@@ -282,6 +286,9 @@ func (s *Store) Analysis(ctx context.Context, userID user.UserID, id domain.ID) 
 	}
 	if err := json.Unmarshal(languagesJSON, &result.Languages); err != nil {
 		return domain.ParsedResume{}, nil, fmt.Errorf("decode parsed languages: %w", err)
+	}
+	if err := json.Unmarshal(experiencesJSON, &result.Experiences); err != nil {
+		return domain.ParsedResume{}, nil, fmt.Errorf("decode parsed experiences: %w", err)
 	}
 	if len(result.Languages) == 0 {
 		result.Languages = language.ResumeLanguages(result.Text)

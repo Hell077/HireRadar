@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/language"
@@ -65,7 +66,7 @@ func ExtractText(ctx context.Context, data []byte) (string, error) {
 
 func Analyze(resumeID domain.ID, text string, vocabulary []SkillTerm) domain.ParsedResume {
 	lines := strings.Split(text, "\n")
-	result := domain.ParsedResume{ResumeID: resumeID, Text: text, Skills: []domain.DetectedSkill{}, Positions: []domain.DetectedPosition{}, Languages: language.ResumeLanguages(text)}
+	result := domain.ParsedResume{ResumeID: resumeID, Text: text, Skills: []domain.DetectedSkill{}, Positions: []domain.DetectedPosition{}, Experiences: []domain.Experience{}, Languages: language.ResumeLanguages(text)}
 	seenSkills := map[string]bool{}
 	for _, term := range vocabulary {
 		canonical := strings.ToLower(term.Name)
@@ -105,10 +106,144 @@ func Analyze(resumeID domain.ID, text string, vocabulary []SkillTerm) domain.Par
 			result.TotalExperienceMonths = n * 12
 		}
 	}
+	result.Experiences = extractExperiences(lines, vocabulary)
+	applySkillExperience(&result)
 	return result
 }
 
 var yearsExperience = regexp.MustCompile(`(?i)(\d{1,2})\+?\s+years?\s+(?:of\s+)?experience`)
+var experienceDateRange = regexp.MustCompile(`(?i)((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}|\d{1,2}/\d{4}|\d{4})\s*[-–—]\s*(present|current|now|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}|\d{1,2}/\d{4}|\d{4})`)
+
+func extractExperiences(lines []string, vocabulary []SkillTerm) []domain.Experience {
+	result := []domain.Experience{}
+	for index, line := range lines {
+		match := experienceDateRange.FindStringSubmatchIndex(line)
+		if len(match) < 6 {
+			continue
+		}
+		startDate, ok := parseExperienceDate(line[match[2]:match[3]])
+		if !ok {
+			continue
+		}
+		endText := strings.TrimSpace(line[match[4]:match[5]])
+		current := strings.EqualFold(endText, "present") || strings.EqualFold(endText, "current") || strings.EqualFold(endText, "now")
+		var endDate *time.Time
+		if !current {
+			parsed, ok := parseExperienceDate(endText)
+			if !ok {
+				continue
+			}
+			endDate = &parsed
+			if endDate.Before(startDate) {
+				continue
+			}
+		}
+		header := strings.TrimSpace(line[:match[0]] + " " + line[match[1]:])
+		title, company := parseExperienceHeader(header)
+		if title == "" {
+			continue
+		}
+		sectionEnd := len(lines)
+		for next := index + 1; next < len(lines); next++ {
+			if experienceDateRange.MatchString(lines[next]) {
+				sectionEnd = next
+				break
+			}
+		}
+		block := strings.Join(lines[index:sectionEnd], "\n")
+		experience := domain.Experience{Company: company, Title: title, StartDate: &startDate, EndDate: endDate, Current: current, Skills: []domain.DetectedSkill{}, Confidence: 0.65}
+		for _, term := range vocabulary {
+			if term.Name != "" && (containsTerm(block, term.Name) || containsTerm(block, term.Normalized)) {
+				experience.Skills = append(experience.Skills, domain.DetectedSkill{Name: term.Name, Confidence: 0.65})
+			}
+		}
+		result = append(result, experience)
+	}
+	return result
+}
+
+func parseExperienceHeader(value string) (title, company string) {
+	value = strings.Trim(strings.TrimSpace(value), "|,;–—- ")
+	if value == "" {
+		return "", ""
+	}
+	for _, separator := range []string{" at ", " @ ", " | ", " — ", " – "} {
+		if index := strings.Index(strings.ToLower(value), strings.ToLower(separator)); index >= 0 {
+			left := strings.Trim(value[:index], " |,;–—- ")
+			right := strings.Trim(value[index+len(separator):], " |,;–—- ")
+			if hasPositionSignal(strings.ToLower(left)) {
+				return left, right
+			}
+			if hasPositionSignal(strings.ToLower(right)) {
+				return right, left
+			}
+		}
+	}
+	if hasPositionSignal(strings.ToLower(value)) {
+		return value, ""
+	}
+	return "", ""
+}
+
+func parseExperienceDate(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	for _, layout := range []string{"January 2006", "Jan 2006", "01/2006", "2006"} {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, time.UTC), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func applySkillExperience(parsed *domain.ParsedResume) {
+	for index := range parsed.Skills {
+		first := time.Time{}
+		last := time.Time{}
+		months := 0
+		current := false
+		for _, experience := range parsed.Experiences {
+			if !experienceHasSkill(experience, parsed.Skills[index].Name) || experience.StartDate == nil {
+				continue
+			}
+			if first.IsZero() || experience.StartDate.Before(first) {
+				first = *experience.StartDate
+			}
+			end := time.Now().UTC()
+			if experience.EndDate != nil {
+				end = *experience.EndDate
+			}
+			if end.After(last) {
+				last = end
+			}
+			months += max(0, (end.Year()-experience.StartDate.Year())*12+int(end.Month()-experience.StartDate.Month()))
+			current = current || experience.Current
+		}
+		if first.IsZero() {
+			continue
+		}
+		if months > 840 {
+			months = 840
+		}
+		parsed.Skills[index].EstimatedExperienceMonths = months
+		parsed.Skills[index].Confidence = min(parsed.Skills[index].Confidence, 0.65)
+		parsed.Skills[index].Current = current
+		firstUsed, lastUsed := first, last
+		parsed.Skills[index].FirstUsed = &firstUsed
+		if !current {
+			parsed.Skills[index].LastUsed = &lastUsed
+		}
+	}
+}
+
+func experienceHasSkill(experience domain.Experience, name string) bool {
+	for _, skill := range experience.Skills {
+		if strings.EqualFold(skill.Name, name) {
+			return true
+		}
+	}
+	return false
+}
 
 func containsTerm(text, term string) bool {
 	term = strings.ToLower(strings.TrimSpace(term))

@@ -127,8 +127,15 @@ type Count struct {
 	Count int    `json:"count"`
 }
 
+type ProviderCoverage struct {
+	Provider string `json:"provider"`
+	Status   string `json:"status"`
+	Count    int    `json:"count"`
+}
+
 type Overview struct {
-	Sources         []DiscoverySourceStatus `json:"sources"`
-	CandidateStates []Count                 `json:"candidate_states"`
-	Providers       []Count                 `json:"providers"`
+	Sources          []DiscoverySourceStatus `json:"sources"`
+	CandidateStates  []Count                 `json:"candidate_states"`
+	Providers        []Count                 `json:"providers"`
+	ProviderCoverage []ProviderCoverage      `json:"provider_coverage"`
 }

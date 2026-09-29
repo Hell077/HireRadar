@@ -9,7 +9,6 @@ import (
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
-	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -93,17 +92,26 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if len(results) != 1 || results[0].JobID != goodID || results[0].Score < 60 {
 		t.Fatalf("unexpected matching result: %+v", results)
 	}
+	var candidateVersion, jobVersion, savedCandidateVersion, savedJobVersion int64
+	var savedConfidence int
+	if err := pool.QueryRow(ctx, `SELECT p.match_version,j.match_version,m.candidate_version,m.job_version,m.confidence FROM user_profiles p JOIN jobs j ON j.id=$2 JOIN user_job_matches m ON m.user_id=p.user_id AND m.job_id=j.id WHERE p.user_id=$1`, userID, goodID).Scan(&candidateVersion, &jobVersion, &savedCandidateVersion, &savedJobVersion, &savedConfidence); err != nil {
+		t.Fatal(err)
+	}
+	if candidateVersion <= 1 || jobVersion <= 1 || savedCandidateVersion != candidateVersion || savedJobVersion != jobVersion || savedConfidence <= 0 {
+		t.Fatalf("match versions/confidence candidate=%d/%d job=%d/%d confidence=%d", savedCandidateVersion, candidateVersion, savedJobVersion, jobVersion, savedConfidence)
+	}
 	if _, err := service.Refresh(ctx, user.UserID(userID)); err != nil {
 		t.Fatal(err)
 	}
 	listed, err := service.List(ctx, user.UserID(userID), 100)
-	if err != nil || len(listed) != 1 || listed[0].JobID != goodID || !listed[0].Eligible || len(listed[0].Components) != 5 {
+	if err != nil || len(listed) != 1 || listed[0].JobID != goodID || !listed[0].Eligible || len(listed[0].Components) != 5 || listed[0].Confidence <= 0 {
 		t.Fatalf("saved match list=%+v err=%v", listed, err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE user_job_matches SET score=90,computed_at=now() WHERE user_id=$1 AND job_id=$2`, userID, goodID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,70,'[]'::jsonb)`, userID, rejectedID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components,candidate_version,job_version)
+		SELECT $1,$2,70,'[]'::jsonb,p.match_version,j.match_version FROM user_profiles p JOIN jobs j ON j.id=$2 WHERE p.user_id=$1`, userID, rejectedID); err != nil {
 		t.Fatal(err)
 	}
 	firstPage, err := service.ListPage(ctx, user.UserID(userID), "", 1)
@@ -132,8 +140,7 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 		t.Fatal(err)
 	}
 	worker := NewOutboxWorker(pool, func(ctx context.Context, id user.UserID) error {
-		_, err := service.Refresh(ctx, id)
-		return err
+		return service.RefreshProfile(ctx, id)
 	}, func(ctx context.Context, id string) error {
 		return service.RefreshJob(ctx, id)
 	})
@@ -148,9 +155,6 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	found, err = worker.ProcessEvent(ctx, eventID)
 	if err != nil || found {
 		t.Fatalf("duplicate event processing found=%v err=%v", found, err)
-	}
-	if err := NewStore(pool).SaveMatches(ctx, user.UserID(userID), []engine.Result{}); err != nil {
-		t.Fatal(err)
 	}
 	jobEventID := uuid.NewString()
 	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'job.created','job',$2,jsonb_build_object('job_id',$2::text))`, jobEventID, goodID); err != nil {
@@ -191,9 +195,6 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	var attempts int
 	if err := pool.QueryRow(ctx, `SELECT attempts FROM outbox_events WHERE id=$1`, retryEventID).Scan(&attempts); err != nil || attempts != 1 {
 		t.Fatalf("retry attempts=%d err=%v", attempts, err)
-	}
-	if err := NewStore(pool).SaveMatches(ctx, user.UserID(userID), []engine.Result{}); err != nil {
-		t.Fatal(err)
 	}
 	listed, err = service.List(ctx, user.UserID(userID), 100)
 	if err != nil || len(listed) != 0 {

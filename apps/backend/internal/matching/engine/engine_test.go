@@ -74,6 +74,68 @@ func TestEvaluateKeepsUnknownEvidenceNeutral(t *testing.T) {
 	}
 }
 
+func TestSeniorityScoreUsesDistanceAndDirection(t *testing.T) {
+	for _, test := range []struct {
+		candidate, job string
+		want           int
+	}{
+		{"senior", "senior", 100},
+		{"staff", "senior", 80},
+		{"junior", "mid", 60},
+		{"senior", "junior", 25},
+		{"intern", "senior", 0},
+		{"unknown", "senior", 50},
+	} {
+		if got := seniorityScore(test.candidate, test.job); got != test.want {
+			t.Errorf("seniorityScore(%q,%q)=%d, want %d", test.candidate, test.job, got, test.want)
+		}
+	}
+}
+
+func TestSkillComponentSupportsAliasesRequirementsAndExplanations(t *testing.T) {
+	years := 3.0
+	component := skillComponent(
+		[]profiledomain.Skill{{Name: "Go Lang", Years: &years, Level: "intermediate", Confidence: 0.9}},
+		[]jobdomain.JobSkill{
+			{Name: "Golang", Required: true, Confidence: 0.95, MinimumYears: floatPointer(5), MinimumLevel: "advanced"},
+			{Name: "AWS", Confidence: 0.8},
+		},
+		"Skills: Golang and AWS",
+		35,
+	)
+	if component.Code != "skills" || component.Weight != 35 || component.Score >= 100 || component.Confidence == 0 {
+		t.Fatalf("unexpected skill component: %+v", component)
+	}
+	if len(component.Matched) != 1 || component.Matched[0] != "Golang" || len(component.MissingPreferred) != 1 || component.MissingPreferred[0] != "AWS" {
+		t.Fatalf("skill explanation missing evidence: %+v", component)
+	}
+}
+
+func TestSkillComponentTreatsAbsentCandidateProfileAsUnknown(t *testing.T) {
+	component := skillComponent(nil, []jobdomain.JobSkill{{Name: "Go", Required: true, Confidence: 0.9}}, "Go Engineer", 35)
+	if component.Score != 50 || component.Confidence != 20 || len(component.Unknown) != 1 || len(component.MissingRequired) != 0 {
+		t.Fatalf("missing profile skills became a definite mismatch: %+v", component)
+	}
+}
+
+func TestMatchConfidenceFallsWhenSalaryEvidenceIsUnknown(t *testing.T) {
+	now := time.Now().UTC()
+	minimum := &profiledomain.Money{Amount: 100000, Currency: "USD"}
+	job := jobdomain.Job{ID: "unknown-salary", Title: "Backend Engineer", Status: jobdomain.Active, Eligibility: jobdomain.EligibilityUnknown, Seniority: jobdomain.Senior, FirstSeenAt: now}
+	candidate := Candidate{Profile: profiledomain.Profile{Seniority: "senior"}, Preferences: profiledomain.Preferences{MinimumSalary: minimum, MaximumJobAgeDays: 30}}
+	result := Evaluate(candidate, job, now)
+	if result.Confidence >= 60 {
+		t.Fatalf("unknown salary should reduce confidence: %+v", result)
+	}
+	for _, component := range result.Components {
+		if component.Code == "salary" && component.Confidence != 0 {
+			t.Fatalf("unknown salary component confidence=%d", component.Confidence)
+		}
+	}
+}
+
+func floatPointer(value float64) *float64 { return &value }
+
 func TestEvaluateExcludesUnrelatedOccupationsForSoftwareCandidate(t *testing.T) {
 	now := time.Now().UTC()
 	candidate := Candidate{

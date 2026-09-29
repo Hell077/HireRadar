@@ -12,6 +12,7 @@ import (
 	"time"
 
 	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	"github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,6 +45,7 @@ func NewWorker(pool *pgxpool.Pool, fetcher interface {
 func (w *Worker) Run(ctx context.Context) error {
 	slog.Info("source worker started", "parallelism", w.parallelism)
 	for ctx.Err() == nil {
+		w.refreshQueueMetrics(ctx)
 		sources, err := w.claimDue(ctx)
 		if err != nil && ctx.Err() == nil {
 			slog.Error("claim due sources failed", "error", err)
@@ -80,6 +82,21 @@ func (w *Worker) Run(ctx context.Context) error {
 	return nil
 }
 
+func (w *Worker) refreshQueueMetrics(ctx context.Context) {
+	metrics := observability.DefaultMetrics
+	if !metrics.ShouldRefresh("source_queue", time.Now(), 30*time.Second) {
+		return
+	}
+	var depth int64
+	var oldestAge float64
+	err := w.pool.QueryRow(ctx, `SELECT count(*),COALESCE(GREATEST(0,EXTRACT(EPOCH FROM now()-MIN(next_sync_at))),0)
+		FROM sources WHERE enabled=true AND next_sync_at<=now()`).Scan(&depth, &oldestAge)
+	if err == nil {
+		metrics.SetGauge("hireradar_source_queue_depth", nil, float64(depth))
+		metrics.SetGauge("hireradar_source_queue_oldest_pending_age_seconds", nil, oldestAge)
+	}
+}
+
 func (w *Worker) claimDue(ctx context.Context) ([]domain.Source, error) {
 	tx, err := w.pool.Begin(ctx)
 	if err != nil {
@@ -111,7 +128,15 @@ func (w *Worker) claimDue(ctx context.Context) ([]domain.Source, error) {
 	return sources, nil
 }
 
-func (w *Worker) syncSource(ctx context.Context, source domain.Source) error {
+func (w *Worker) syncSource(ctx context.Context, source domain.Source) (retErr error) {
+	started := time.Now()
+	defer func() {
+		observability.DefaultMetrics.Add("hireradar_source_sync_total", nil, 1)
+		observability.DefaultMetrics.ObserveDuration("hireradar_source_sync_duration", nil, time.Since(started))
+		if retErr != nil {
+			observability.DefaultMetrics.Add("hireradar_source_sync_failed_total", nil, 1)
+		}
+	}()
 	runID := uuid.NewString()
 	if _, err := w.pool.Exec(ctx, `INSERT INTO source_sync_runs(id,source_id,status) VALUES($1,$2,'running')`, runID, source.ID); err != nil {
 		return fmt.Errorf("start sync run: %w", err)
@@ -128,11 +153,14 @@ func (w *Worker) syncSource(ctx context.Context, source domain.Source) error {
 		_ = w.finishFailed(ctx, source, runID, err)
 		return err
 	}
+	observability.DefaultMetrics.Add("hireradar_jobs_fetched_total", nil, float64(len(result.Jobs)))
 	newCount, updatedCount, err := w.save(ctx, source, runID, result)
 	if err != nil {
 		_ = w.finishFailed(ctx, source, runID, err)
 		return err
 	}
+	observability.DefaultMetrics.Add("hireradar_jobs_created_total", nil, float64(newCount))
+	observability.DefaultMetrics.Add("hireradar_jobs_updated_total", nil, float64(updatedCount))
 	slog.Info("source sync complete", "source_id", source.ID, "fetched", len(result.Jobs), "new", newCount, "updated", updatedCount)
 	return nil
 }
@@ -144,6 +172,7 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 	}
 	defer tx.Rollback(ctx)
 	var newCount, updatedCount int
+	var closedCount int
 	vocabulary, err := w.jobs.LoadSkillVocabulary(ctx, tx)
 	if err != nil {
 		return 0, 0, err
@@ -175,7 +204,8 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 		}
 	}
 	if result.AuthoritativeSnapshot {
-		if err := w.jobs.CloseMissing(ctx, tx, source.ID, runID); err != nil {
+		closedCount, err = w.jobs.CloseMissing(ctx, tx, source.ID, runID)
+		if err != nil {
 			return 0, 0, err
 		}
 	}
@@ -188,6 +218,7 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 	if err := tx.Commit(ctx); err != nil {
 		return 0, 0, fmt.Errorf("commit source sync: %w", err)
 	}
+	observability.DefaultMetrics.Add("hireradar_jobs_closed_total", nil, float64(closedCount))
 	return newCount, updatedCount, nil
 }
 
@@ -207,7 +238,11 @@ func (w *Worker) finishFailed(ctx context.Context, source domain.Source, runID s
 	if _, err := tx.Exec(ctx, `UPDATE sources SET next_sync_at=now()+interval '1 minute',updated_at=now() WHERE id=$1`, source.ID); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	observability.DefaultMetrics.Add("hireradar_source_sync_retry_total", nil, 1)
+	return nil
 }
 
 func nonNullJSON(data json.RawMessage) string {

@@ -46,7 +46,7 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	}
 	ingestor := NewIngestor()
 	for n, location := range []string{"Remote — Kazakhstan", "Remote — US only"} {
-		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Description: "Uses Go for backend engineering. Salary: $120k-$160k annually.", Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
+		external := sourcedomain.ExternalJob{ExternalID: fmt.Sprintf("%d", n), CompanyName: company, Title: fmt.Sprintf("Engineer %d", n), Description: "Programming languages: Go. Salary: $120k-$160k annually.", Location: location, ApplyURL: fmt.Sprintf("%s/%d", urlBase, n)}
 		vocabulary, err := ingestor.LoadSkillVocabulary(ctx, tx)
 		if err != nil {
 			_ = tx.Rollback(ctx)
@@ -70,6 +70,9 @@ func TestJobCatalogCursorAndFilters(t *testing.T) {
 	}
 	if first.Items[0].Salary == nil || first.Items[0].Salary.Minimum != 120000 || first.Items[0].Salary.Currency != "USD" {
 		t.Fatalf("salary range missing from feed: %+v", first.Items[0].Salary)
+	}
+	if first.Items[0].Family != "software_engineering" || first.Items[0].FamilyConfidence <= 0 || first.Items[0].SeniorityConfidence <= 0 {
+		t.Fatalf("job classification missing from feed: %+v", first.Items[0])
 	}
 	second, err := catalog.List(ctx, ListQuery{Limit: 1, Cursor: first.NextCursor, SourceID: sourceID})
 	if err != nil {

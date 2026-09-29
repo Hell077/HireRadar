@@ -62,12 +62,41 @@ func CleanDescription(value string) string {
 
 func Normalize(source sourcedomain.Source, external sourcedomain.ExternalJob) jobdomain.Job {
 	policy, eligibility, countries := ClassifyLocation(external.Location)
+	classification := ClassifyPosition(external.Title)
 	types := []string{}
 	if value := strings.TrimSpace(external.EmploymentType); value != "" {
 		types = append(types, value)
 	}
 	description := CleanDescription(external.Description)
-	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: ClassifySeniority(external.Title), Description: description, Salary: ExtractSalary(external.Description), EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+	salary := ExtractSalary(external.Description)
+	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: classification.Seniority, Family: classification.Family, Speciality: classification.Speciality, FamilyConfidence: classification.Confidence, SeniorityConfidence: seniorityConfidence(classification.Seniority), LocationConfidence: locationConfidence(policy, eligibility, countries), SalaryConfidence: salaryConfidence(salary), Description: description, Salary: salary, EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+}
+
+func seniorityConfidence(value jobdomain.Seniority) float64 {
+	if value == jobdomain.SeniorityUnknown {
+		return 0.35
+	}
+	return 0.8
+}
+
+func locationConfidence(policy jobdomain.RemotePolicy, eligibility jobdomain.Eligibility, countries []string) float64 {
+	if policy == jobdomain.RemoteUnknown && eligibility == jobdomain.EligibilityUnknown && len(countries) == 0 {
+		return 0.25
+	}
+	if eligibility == jobdomain.EligibilityUnknown {
+		return 0.55
+	}
+	return 0.9
+}
+
+func salaryConfidence(value *jobdomain.SalaryRange) float64 {
+	if value == nil {
+		return 0
+	}
+	if value.Period == "unspecified" {
+		return 0.55
+	}
+	return 0.8
 }
 
 func ExtractSalary(description string) *jobdomain.SalaryRange {
