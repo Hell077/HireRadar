@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { authenticatedRequest } from "@/lib/api/server";
+import { normalizePositions } from "@/lib/profile/positions";
 
 const values = (data: FormData, name: string) =>
   data.getAll(name).map(String).filter(Boolean);
@@ -33,14 +34,13 @@ export async function saveSettings(formData: FormData) {
 
   const requests = await Promise.all([
     put("/api/v1/profile/positions", {
-      positions: String(formData.get("positions") ?? "")
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
+      positions: normalizePositions(formData.getAll("positions").map(String)),
     }),
     put("/api/v1/profile/preferences", {
       remote_policies: values(formData, "remotePolicy"),
-      employment_types: values(formData, "employmentType"),
+      employment_types: values(formData, "employmentType").flatMap((value) =>
+        value === "project" ? ["contract", "freelance", "b2b"] : [value],
+      ),
       allowed_regions: values(formData, "region"),
       excluded_countries: values(formData, "excludedCountry"),
       minimum_match_score: minimumScore,

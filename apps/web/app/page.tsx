@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   BellRing,
   Check,
@@ -6,7 +7,7 @@ import {
   MapPin,
   Send,
 } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { Button } from "@repo/ui/components/button";
@@ -22,6 +23,7 @@ import {
 import { getCandidateData } from "@/lib/api/server";
 import { connectTelegram } from "@/app/settings-actions";
 import { deleteResume, downloadResume } from "@/app/resume-actions";
+import { normalizePositions } from "@/lib/profile/positions";
 
 function SectionHeading({
   title,
@@ -44,6 +46,7 @@ export default async function ProfilePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const t = await getTranslations("profile");
+  const locale = await getLocale();
   const status = await searchParams;
   const candidate = await getCandidateData();
   if (!candidate) redirect("/sign-in");
@@ -56,6 +59,7 @@ export default async function ProfilePage({
     sources,
     telegram,
   } = candidate;
+  const normalizedPositions = normalizePositions(positions);
   const latestResume = [...resumes].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   )[0];
@@ -69,23 +73,22 @@ export default async function ProfilePage({
       .map((part) => part[0])
       .join("")
       .toUpperCase() || "?";
+  const countryName = profile.country
+    ? new Intl.DisplayNames([locale], { type: "region" }).of(profile.country)
+    : "";
   const location =
-    [profile.city, profile.country].filter(Boolean).join(", ") ||
+    [profile.city, countryName].filter(Boolean).join(", ") ||
     t("locationMissing");
-  const completeness = Math.round(
-    ([
-      profile.first_name,
-      profile.last_name,
-      profile.country,
-      profile.city,
-      profile.timezone,
-      profile.seniority,
-      profile.desired_salary,
-      skills.length > 0,
-    ].filter(Boolean).length /
-      8) *
-      100,
-  );
+  const missingFields = [
+    profile.first_name ? null : t("missingFirstName"),
+    profile.last_name ? null : t("missingLastName"),
+    profile.country ? null : t("missingCountry"),
+    profile.city ? null : t("missingCity"),
+    profile.seniority ? null : t("missingSeniority"),
+    profile.desired_salary?.amount ? null : t("missingSalary"),
+    skills.length > 0 ? null : t("missingSkills"),
+  ].filter((field): field is string => Boolean(field));
+  const completeness = Math.round(((7 - missingFields.length) / 7) * 100);
   return (
     <div className="min-h-screen pb-24 md:pb-0">
       <AppHeader />
@@ -201,18 +204,43 @@ export default async function ProfilePage({
             <section className="border-border bg-card rounded-xl border p-5 sm:p-6">
               <SectionHeading
                 title={t("jobPreferences")}
-                action={t("editProfile")}
+                action={
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary"
+                  >
+                    <Link href="/settings#job-preferences">{t("edit")}</Link>
+                  </Button>
+                }
               />
               <dl className="mt-5 grid gap-5 sm:grid-cols-3">
                 {[
-                  [t("roles"), positions.join(" · ") || "—"],
+                  [t("roles"), normalizedPositions.join(" · ") || "—"],
                   [
-                    t("remoteRegion"),
-                    preferences?.remote_policies?.join(" · ") || "—",
+                    t("availability"),
+                    t("availabilityFrom", {
+                      country: countryName || profile.country || "—",
+                    }),
                   ],
                   [
                     t("employment"),
-                    preferences?.employment_types?.join(" · ") || "—",
+                    [
+                      preferences?.employment_types?.includes("full_time")
+                        ? t("employmentFullTime")
+                        : null,
+                      preferences?.employment_types?.includes("part_time")
+                        ? t("employmentPartTime")
+                        : null,
+                      preferences?.employment_types?.some((value) =>
+                        ["contract", "b2b", "freelance"].includes(value),
+                      )
+                        ? t("employmentProject")
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "—",
                   ],
                 ].map(([label, value]) => (
                   <div key={label}>
@@ -240,9 +268,11 @@ export default async function ProfilePage({
                   style={{ width: `${completeness}%` }}
                 />
               </div>
-              <p className="text-muted-foreground mt-3 text-xs leading-5">
-                {t("completenessHelp")}
-              </p>
+              {missingFields.length ? (
+                <p className="text-muted-foreground mt-3 text-xs leading-5">
+                  {t("incompleteHelp", { fields: missingFields.join(" · ") })}
+                </p>
+              ) : null}
             </section>
 
             <section className="border-border bg-card rounded-xl border p-5">

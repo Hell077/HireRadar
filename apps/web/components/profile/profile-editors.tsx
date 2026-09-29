@@ -46,8 +46,29 @@ function Field({
   );
 }
 
+const skillAliases: Record<string, string> = {
+  go: "Go",
+  golang: "Go",
+  js: "JavaScript",
+  javascript: "JavaScript",
+  ts: "TypeScript",
+  typescript: "TypeScript",
+  reactjs: "React",
+  "react.js": "React",
+  nextjs: "Next.js",
+  "next.js": "Next.js",
+  postgres: "PostgreSQL",
+  postgresql: "PostgreSQL",
+};
+
+function canonicalSkill(value: string) {
+  const trimmed = value.trim();
+  return skillAliases[trimmed.toLocaleLowerCase()] ?? trimmed;
+}
+
 export function EditProfileDialog({ profile }: { profile: CandidateProfile }) {
   const t = useTranslations("profileEditor");
+  const [country, setCountry] = useState(profile.country || "KZ");
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -89,24 +110,33 @@ export function EditProfileDialog({ profile }: { profile: CandidateProfile }) {
             max={70}
             defaultValue={profile.experience_years}
           />
-          <Field
-            id="edit-country"
-            name="country"
-            label={t("country")}
-            defaultValue={profile.country}
-            maxLength={2}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="edit-country">{t("country")}</Label>
+            <select
+              id="edit-country"
+              name="country"
+              value={country}
+              onChange={(event) => setCountry(event.target.value)}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {countries.map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">{t("locationHelp")}</p>
+          </div>
           <Field
             id="edit-city"
             name="city"
             label={t("city")}
             defaultValue={profile.city}
           />
-          <Field
-            id="edit-timezone"
+          <input
+            type="hidden"
             name="timezone"
-            label={t("timezone")}
-            defaultValue={profile.timezone}
+            value={timezones[country] ?? profile.timezone ?? "UTC"}
           />
           <Field
             id="edit-salary"
@@ -117,13 +147,21 @@ export function EditProfileDialog({ profile }: { profile: CandidateProfile }) {
             defaultValue={profile.desired_salary?.amount}
             placeholder={t("salaryPlaceholder")}
           />
-          <Field
-            id="edit-currency"
-            name="currency"
-            label={t("currency")}
-            defaultValue={profile.desired_salary?.currency ?? "USD"}
-            maxLength={3}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="edit-currency">{t("currency")}</Label>
+            <select
+              id="edit-currency"
+              name="currency"
+              defaultValue={profile.desired_salary?.currency ?? "USD"}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {["USD", "EUR", "KZT", "GBP"].map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
+          </div>
           <DialogFooter className="sm:col-span-2">
             <DialogClose asChild>
               <Button type="button" variant="outline">
@@ -144,13 +182,35 @@ export function EditSkillsSheet({
   initialSkills: CandidateSkill[];
 }) {
   const t = useTranslations("profileEditor");
-  const [skills, setSkills] = useState(initialSkills.map(({ name }) => name));
+  const [skills, setSkills] = useState(() =>
+    initialSkills
+      .map(({ name }) => canonicalSkill(name))
+      .filter(
+        (name, index, values) =>
+          values.findIndex(
+            (candidate) =>
+              candidate.toLocaleLowerCase() === name.toLocaleLowerCase(),
+          ) === index,
+      ),
+  );
   const [skill, setSkill] = useState("");
+  const [skillNotice, setSkillNotice] = useState("");
 
   function addSkill() {
-    const value = skill.trim();
-    if (value && !skills.includes(value))
-      setSkills((items) => [...items, value]);
+    const value = canonicalSkill(skill);
+    if (!value) return;
+    if (
+      skills.some(
+        (item) => item.toLocaleLowerCase() === value.toLocaleLowerCase(),
+      )
+    ) {
+      setSkillNotice(t("skillDuplicate", { skill: value }));
+      return;
+    }
+    setSkills((items) => [...items, value]);
+    setSkillNotice(
+      value !== skill.trim() ? t("skillNormalized", { skill: value }) : "",
+    );
     setSkill("");
   }
 
@@ -171,6 +231,7 @@ export function EditSkillsSheet({
           <div className="flex gap-2 py-3">
             <Input
               value={skill}
+              onFocus={() => setSkillNotice("")}
               onChange={(event) => setSkill(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -189,6 +250,9 @@ export function EditSkillsSheet({
               <Plus aria-hidden="true" />
             </Button>
           </div>
+          {skillNotice ? (
+            <p className="pb-3 text-xs text-muted-foreground">{skillNotice}</p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {skills.map((item) => (
               <span
@@ -307,3 +371,24 @@ export function ReplaceResumeDialog() {
     </Dialog>
   );
 }
+const countries = [
+  ["KZ", "Казахстан / Kazakhstan"],
+  ["KG", "Кыргызстан / Kyrgyzstan"],
+  ["UZ", "Узбекистан / Uzbekistan"],
+  ["AZ", "Азербайджан / Azerbaijan"],
+  ["AM", "Армения / Armenia"],
+  ["GE", "Грузия / Georgia"],
+  ["UA", "Украина / Ukraine"],
+  ["RU", "Россия / Russia"],
+] as const;
+
+const timezones: Record<string, string> = {
+  KZ: "Asia/Almaty",
+  KG: "Asia/Bishkek",
+  UZ: "Asia/Tashkent",
+  AZ: "Asia/Baku",
+  AM: "Asia/Yerevan",
+  GE: "Asia/Tbilisi",
+  UA: "Europe/Kyiv",
+  RU: "Europe/Moscow",
+};

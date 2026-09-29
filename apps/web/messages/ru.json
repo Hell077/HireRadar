@@ -398,5 +398,26 @@
     "confidence": "Уверенность совпадения: {value}%",
     "manualRequiredHelp": "Для завершения отклика требуется действие на стороне работодателя.",
     "openEmployerSite": "Открыть форму работодателя"
+  },
+  "jobFilters": {
+    "goDeveloper": "Go разработчик",
+    "backendEngineer": "Backend-разработчик",
+    "frontendEngineer": "Frontend-разработчик",
+    "reactDeveloper": "React-разработчик",
+    "roles": "Желаемые должности",
+    "rolesHelp": "Выберите подходящие роли или добавьте свою. Повторяющиеся названия объединяются.",
+    "backend": "Go / Backend",
+    "frontend": "Frontend / React",
+    "fullstack": "Full stack",
+    "lead": "Техническое руководство",
+    "customRolePlaceholder": "Например, Go Developer",
+    "addRole": "Добавить",
+    "selectedRoles": "Выбранные должности",
+    "removeRole": "Удалить роль {role}",
+    "noRolesSelected": "Выберите или добавьте хотя бы одну должность.",
+    "workFullTime": "Полная занятость",
+    "workPartTime": "Частичная занятость",
+    "workProject": "Проектная работа",
+    "workProjectHelp": "Контрактные задачи, отдельные проекты и работа на себя."
   }
 }

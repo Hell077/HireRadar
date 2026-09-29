@@ -398,5 +398,26 @@
     "confidence": "Match confidence: {value}%",
     "manualRequiredHelp": "This provider requires a human to finish the application.",
     "openEmployerSite": "Open employer application"
+  },
+  "jobFilters": {
+    "goDeveloper": "Go developer",
+    "backendEngineer": "Backend engineer",
+    "frontendEngineer": "Frontend engineer",
+    "reactDeveloper": "React developer",
+    "roles": "Desired positions",
+    "rolesHelp": "Choose relevant roles or add your own. Duplicate titles are combined.",
+    "backend": "Go / Backend",
+    "frontend": "Frontend / React",
+    "fullstack": "Full stack",
+    "lead": "Engineering leadership",
+    "customRolePlaceholder": "For example, Go Developer",
+    "addRole": "Add",
+    "selectedRoles": "Selected positions",
+    "removeRole": "Remove {role}",
+    "noRolesSelected": "Choose or add at least one position.",
+    "workFullTime": "Full-time",
+    "workPartTime": "Part-time",
+    "workProject": "Project-based",
+    "workProjectHelp": "Fixed-term contracts, individual projects, or independent work."
   }
 }
