@@ -54,6 +54,14 @@ function summarize(description: string) {
   return plain.length > 220 ? `${plain.slice(0, 217)}…` : plain;
 }
 
+function sourceName(applyUrl: string) {
+  try {
+    return new URL(applyUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return "job source";
+  }
+}
+
 function mapJob(job: APIJob, match?: Match): Job {
   return {
     id: job.id,
@@ -68,7 +76,7 @@ function mapJob(job: APIJob, match?: Match): Job {
     description: job.description,
     skills: (job.skills ?? []).map(({ name }) => name),
     missingSkills: match?.exclusions ?? [],
-    source: `Priority ${job.source_priority}`,
+    source: sourceName(job.apply_url),
     applyUrl: job.apply_url,
     remotePolicy: job.remote_policy,
     eligibility: job.eligibility,
