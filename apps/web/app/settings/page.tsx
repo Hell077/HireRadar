@@ -65,10 +65,13 @@ export default async function SettingsPage({
   const t = await getTranslations("settings");
   const params = await searchParams;
   const data = await getSettingsData();
+  const sourcePreferences = new Map(
+    data.sourcePreferences.map(({ source_id, enabled }) => [source_id, enabled]),
+  );
   const enabledSources = new Set(
-    data.sourcePreferences
-      .filter(({ enabled }) => enabled)
-      .map(({ source_id }) => source_id),
+    data.sources
+      .filter(({ id }) => sourcePreferences.get(id) ?? true)
+      .map(({ id }) => id),
   );
   const preferences = data.preferences;
   const notifications = data.notifications;
