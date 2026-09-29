@@ -1,5 +1,6 @@
 import { BriefcaseBusiness, SlidersHorizontal } from "lucide-react";
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@repo/ui/components/button";
 
@@ -19,18 +20,23 @@ export default async function JobsPage({
     remote_policy?: string;
     country?: string;
     eligibility?: string;
+    cursor?: string;
   }>;
 }) {
   const t = await getTranslations("jobs");
   const params = await searchParams;
   const profile = await authenticatedRequest("/api/v1/profile");
   if (!profile?.ok) redirect("/sign-in");
-  const query = new URLSearchParams({ status: "active", limit: "100" });
+  const query = new URLSearchParams({ status: "active" });
   if (params.remote_policy) query.set("remote_policy", params.remote_policy);
   if (params.country) query.set("country", params.country.toUpperCase());
   if (params.eligibility) query.set("eligibility", params.eligibility);
-  const jobs = await getJobs(query.toString());
+  const page = await getJobs(query.toString(), params.cursor ?? "");
+  const jobs = page.items;
   const empty = params.empty === "1" || jobs.length === 0;
+  const nextParams = new URLSearchParams(query);
+  if (page.nextCursor) nextParams.set("cursor", page.nextCursor);
+  const nextHref = page.nextCursor ? `/jobs?${nextParams.toString()}` : null;
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -94,7 +100,7 @@ export default async function JobsPage({
         </Reveal>
 
         <div className="mt-6 space-y-4">
-          {empty ? (
+          {empty && !nextHref ? (
             <StatusState
               icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
               title={t("emptyTitle")}
@@ -102,14 +108,27 @@ export default async function JobsPage({
               actionHref="/settings"
               actionLabel={t("adjustSettings")}
             />
-          ) : (
+          ) : jobs.length > 0 ? (
             jobs.map((job, index) => (
               <Reveal key={job.id} delay={0.08 + index * 0.05}>
                 <JobCard job={job} />
               </Reveal>
             ))
+          ) : (
+            <StatusState
+              icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
+              title={t("pageFilteredEmptyTitle")}
+              description={t("pageFilteredEmptyDescription")}
+            />
           )}
         </div>
+        {nextHref ? (
+          <div className="mt-8 flex justify-center">
+            <Button asChild variant="outline" size="lg">
+              <Link href={nextHref}>{t("nextPage")}</Link>
+            </Button>
+          </div>
+        ) : null}
       </main>
       <MobileNavigation active="jobs" />
     </div>

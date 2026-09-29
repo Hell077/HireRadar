@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
@@ -98,6 +99,26 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	listed, err := service.List(ctx, user.UserID(userID), 100)
 	if err != nil || len(listed) != 1 || listed[0].JobID != goodID || !listed[0].Eligible || len(listed[0].Components) != 5 {
 		t.Fatalf("saved match list=%+v err=%v", listed, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE user_job_matches SET score=90,computed_at=now() WHERE user_id=$1 AND job_id=$2`, userID, goodID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO user_job_matches(user_id,job_id,score,components) VALUES($1,$2,70,'[]'::jsonb)`, userID, rejectedID); err != nil {
+		t.Fatal(err)
+	}
+	firstPage, err := service.ListPage(ctx, user.UserID(userID), "", 1)
+	if err != nil || len(firstPage.Matches) != 1 || firstPage.Matches[0].JobID != goodID || firstPage.NextCursor == "" {
+		t.Fatalf("first match page=%+v err=%v", firstPage, err)
+	}
+	secondPage, err := service.ListPage(ctx, user.UserID(userID), firstPage.NextCursor, 1)
+	if err != nil || len(secondPage.Matches) != 1 || secondPage.Matches[0].JobID != rejectedID || secondPage.NextCursor != "" {
+		t.Fatalf("second match page=%+v err=%v", secondPage, err)
+	}
+	if _, err := service.ListPage(ctx, user.UserID(userID), "invalid", 1); !errors.Is(err, jobdomain.ErrInvalidCursor) {
+		t.Fatalf("invalid match cursor error=%v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, rejectedID); err != nil {
+		t.Fatal(err)
 	}
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_job_matches WHERE user_id=$1`, userID).Scan(&count); err != nil || count != 1 {

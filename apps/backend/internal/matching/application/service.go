@@ -17,6 +17,12 @@ type Repository interface {
 	SaveMatches(context.Context, user.UserID, []engine.Result) error
 	SaveJobMatch(context.Context, user.UserID, engine.Result) error
 	ListMatches(context.Context, user.UserID, int) ([]engine.Result, error)
+	ListMatchPage(context.Context, user.UserID, string, int) (MatchPage, error)
+}
+
+type MatchPage struct {
+	Matches    []engine.Result
+	NextCursor string
 }
 
 type Service struct {
@@ -53,6 +59,10 @@ func (s *Service) Refresh(ctx context.Context, userID user.UserID) ([]engine.Res
 
 func (s *Service) List(ctx context.Context, userID user.UserID, limit int) ([]engine.Result, error) {
 	return s.repository.ListMatches(ctx, userID, limit)
+}
+
+func (s *Service) ListPage(ctx context.Context, userID user.UserID, cursor string, limit int) (MatchPage, error) {
+	return s.repository.ListMatchPage(ctx, userID, cursor, limit)
 }
 
 func (s *Service) RefreshJob(ctx context.Context, jobID string) error {

@@ -985,6 +985,7 @@ export interface components {
              */
             readonly $schema?: string;
             matches: components["schemas"]["Result"][] | null;
+            next_cursor: string;
         };
         MessageStruct: {
             chat: components["schemas"]["ChatStruct"];
@@ -2068,6 +2069,7 @@ export interface operations {
     "matches-list": {
         parameters: {
             query?: {
+                cursor?: string;
                 limit?: number;
             };
             header?: {

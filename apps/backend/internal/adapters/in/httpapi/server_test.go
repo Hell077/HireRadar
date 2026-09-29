@@ -14,6 +14,7 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/lifecycle"
+	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
@@ -74,6 +75,9 @@ func (f *fakeMatchService) Refresh(context.Context, userdomain.UserID) ([]engine
 func (f *fakeMatchService) List(_ context.Context, _ userdomain.UserID, _ int) ([]engine.Result, error) {
 	return []engine.Result{{JobID: "job-id", Score: 88, Eligible: true}}, nil
 }
+func (f *fakeMatchService) ListPage(_ context.Context, _ userdomain.UserID, _ string, _ int) (matchapp.MatchPage, error) {
+	return matchapp.MatchPage{Matches: []engine.Result{{JobID: "job-id", Score: 88, Eligible: true}}}, nil
+}
 
 func TestMatchEndpointsRequireAuthentication(t *testing.T) {
 	service := &fakeMatchService{}
@@ -98,6 +102,23 @@ func TestMatchEndpointsRequireAuthentication(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || service.refreshed != 1 {
 		t.Fatalf("refresh status=%d calls=%d", response.StatusCode, service.refreshed)
+	}
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/matches?limit=10", nil)
+	listRequest.Header.Set("Authorization", "Bearer valid")
+	listResponse, err := app.Test(listRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listResponse.Body.Close()
+	var listBody struct {
+		Matches    []engine.Result `json:"matches"`
+		NextCursor string          `json:"next_cursor"`
+	}
+	if err := json.NewDecoder(listResponse.Body).Decode(&listBody); err != nil {
+		t.Fatal(err)
+	}
+	if listResponse.StatusCode != http.StatusOK || len(listBody.Matches) != 1 {
+		t.Fatalf("match page status=%d response=%+v", listResponse.StatusCode, listBody)
 	}
 }
 

@@ -151,7 +151,10 @@
     "missingHelp": "This is not necessarily required. It is a skill mentioned in the vacancy but missing from your profile.",
     "emptyTitle": "No matching jobs yet",
     "emptyDescription": "We checked your enabled sources but didn’t find a strong match. Try widening your regions, roles or minimum score.",
-    "adjustSettings": "Adjust search settings"
+    "adjustSettings": "Adjust search settings",
+    "pageFilteredEmptyTitle": "No jobs on this page match these filters",
+    "pageFilteredEmptyDescription": "There may be more matching jobs on the next page.",
+    "nextPage": "Show more jobs"
   },
   "saved": {
     "eyebrow": "Your shortlist",

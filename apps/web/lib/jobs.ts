@@ -8,6 +8,8 @@ type APIJob = components["schemas"]["Job"];
 type Match = components["schemas"]["Result"];
 type SavedJob = components["schemas"]["SavedJob"];
 
+export type JobsPage = { items: Job[]; nextCursor: string };
+
 export type Job = {
   id: string;
   title: string;
@@ -83,37 +85,56 @@ function mapJob(job: APIJob, match?: Match): Job {
   };
 }
 
-async function getMatchMap() {
+async function getMatchPage(cursor = "", limit = 20) {
   const accessToken = (await cookies()).get("hr_access")?.value;
   if (!accessToken) return null;
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
   const response = await authenticatedRequest(
-    "/api/v1/matches?limit=100",
+    `/api/v1/matches?${params.toString()}`,
   ).catch(() => null);
-  if (!response?.ok) return new Map<string, Match>();
+  if (!response?.ok)
+    return { matches: new Map<string, Match>(), nextCursor: "" };
   const body = (await response.json()) as {
     matches: Match[] | null;
+    next_cursor?: string;
   };
-  return new Map((body.matches ?? []).map((match) => [match.job_id, match]));
+  return {
+    matches: new Map(
+      (body.matches ?? []).map((match) => [match.job_id, match]),
+    ),
+    nextCursor: body.next_cursor ?? "",
+  };
 }
 
-export async function getJobs(query = "status=active&limit=100") {
-  const matches = await getMatchMap();
-  if (!matches?.size) return [];
+async function getMatchMap() {
+  const page = await getMatchPage("", 100);
+  return page?.matches ?? null;
+}
+
+export async function getJobs(
+  query = "status=active",
+  cursor = "",
+): Promise<JobsPage> {
+  const page = await getMatchPage(cursor, 20);
+  const matches = page?.matches;
+  if (!matches?.size) return { items: [], nextCursor: page?.nextCursor ?? "" };
   const params = new URLSearchParams(query);
   params.set("ids", [...matches.keys()].join(","));
-  params.set("limit", "100");
+  params.set("limit", String(matches.size));
   const response = await apiRequest(`/api/v1/jobs?${params.toString()}`).catch(
     () => null,
   );
-  if (!response?.ok) return [];
+  if (!response?.ok) return { items: [], nextCursor: page?.nextCursor ?? "" };
   const body = (await response.json()) as components["schemas"]["ListResult"];
   const rank = new Map([...matches.keys()].map((id, index) => [id, index]));
-  return (body.items ?? [])
+  const items = (body.items ?? [])
     .sort(
       (left, right) =>
         (rank.get(left.id) ?? Infinity) - (rank.get(right.id) ?? Infinity),
     )
     .map((job) => mapJob(job, matches?.get(job.id)));
+  return { items, nextCursor: page?.nextCursor ?? "" };
 }
 
 export async function getJob(id: string) {

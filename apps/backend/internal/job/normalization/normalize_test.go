@@ -78,6 +78,16 @@ func TestClassifySeniorityAndExtractSkills(t *testing.T) {
 	if got := ExtractSkills("We are a Google team", vocabulary); len(got) != 0 {
 		t.Fatalf("matched skills in unrelated word: %+v", got)
 	}
+	for _, text := range []string{"Please go to the market and speak with users.", "We want someone who can go above and beyond.", "Go-to-Market Engineer"} {
+		if got := ExtractSkills(text, vocabulary); len(got) != 0 {
+			t.Errorf("matched Go language in ordinary prose %q: %+v", text, got)
+		}
+	}
+	for _, text := range []string{"Senior Go Engineer\nBuild APIs for our platform.", "Programming languages: Go, Rust, and Python."} {
+		if got := ExtractSkills(text, vocabulary); len(got) != 1 || got[0].ID != "go" {
+			t.Errorf("failed to detect Go in technical context %q: %+v", text, got)
+		}
+	}
 	aliases := []SkillTerm{{ID: "go-id", Name: "Go", Normalized: "go"}, {ID: "go-id", Name: "Go", Normalized: "golang"}}
 	if got := ExtractSkills("Go and Golang", aliases); len(got) != 1 || got[0].ID != "go-id" {
 		t.Fatalf("skill alias produced duplicate job skills: %+v", got)

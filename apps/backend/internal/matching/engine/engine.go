@@ -5,6 +5,7 @@ import (
 	"time"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
+	"github.com/Hell077/HireRadar/apps/backend/internal/job/normalization"
 	profiledomain "github.com/Hell077/HireRadar/apps/backend/internal/profile/domain"
 )
 
@@ -104,7 +105,7 @@ func Evaluate(candidate Candidate, job jobdomain.Job, now time.Time) Result {
 		weights = *candidate.Weights
 	}
 	result.Components = []Component{
-		{Code: "skills", Score: skillScore(candidate.Skills, job.Skills), Weight: weights.Skills},
+		{Code: "skills", Score: skillScore(candidate.Skills, job.Skills, job.Title+"\n"+job.Description), Weight: weights.Skills},
 		{Code: "position", Score: positionScore(candidate.Positions, job.Title), Weight: weights.Position},
 		{Code: "seniority", Score: seniorityScore(candidate.Profile.Seniority, string(job.Seniority)), Weight: weights.Seniority},
 		{Code: "location", Score: locationScore(candidate.Profile.Country, job), Weight: weights.Location},
@@ -185,8 +186,17 @@ func (w Weights) Valid() bool {
 		w.Skills+w.Position+w.Seniority+w.Location+w.Salary == 100
 }
 
-func skillScore(skills []profiledomain.Skill, wanted []jobdomain.JobSkill) int {
+func skillScore(skills []profiledomain.Skill, wanted []jobdomain.JobSkill, jobText string) int {
 	if len(skills) == 0 || len(wanted) == 0 {
+		return 50
+	}
+	verifiedWanted := make([]jobdomain.JobSkill, 0, len(wanted))
+	for _, skill := range wanted {
+		if normalization.ContainsSkill(jobText, skill.Name) {
+			verifiedWanted = append(verifiedWanted, skill)
+		}
+	}
+	if len(verifiedWanted) == 0 {
 		return 50
 	}
 	known := make(map[string]bool, len(skills))
@@ -194,12 +204,12 @@ func skillScore(skills []profiledomain.Skill, wanted []jobdomain.JobSkill) int {
 		known[normalize(skill.Name)] = true
 	}
 	matched := 0
-	for _, skill := range wanted {
+	for _, skill := range verifiedWanted {
 		if known[normalize(skill.Name)] {
 			matched++
 		}
 	}
-	return matched * 100 / len(wanted)
+	return matched * 100 / len(verifiedWanted)
 }
 
 func positionScore(positions []string, title string) int {

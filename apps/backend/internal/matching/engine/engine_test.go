@@ -12,7 +12,7 @@ func TestEvaluateProducesWeightedExplanation(t *testing.T) {
 	now := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
 	salary := &jobdomain.SalaryRange{Minimum: 120000, Maximum: 160000, Currency: "USD", Period: "year"}
 	job := jobdomain.Job{
-		ID: "job-1", Title: "Senior Backend Engineer", Seniority: jobdomain.Senior,
+		ID: "job-1", Title: "Senior Go Backend Engineer", Description: "Technologies: Go, PostgreSQL", Seniority: jobdomain.Senior,
 		Status: jobdomain.Active, Eligibility: jobdomain.Eligible, RemotePolicy: jobdomain.Remote,
 		Countries: []string{"KZ"}, EmploymentTypes: []string{"full_time"}, FirstSeenAt: now.Add(-time.Hour), Salary: salary,
 		Skills: []jobdomain.JobSkill{{Name: "Go"}, {Name: "PostgreSQL"}},
@@ -25,6 +25,17 @@ func TestEvaluateProducesWeightedExplanation(t *testing.T) {
 	got := Evaluate(candidate, job, now)
 	if !got.Eligible || got.Score != 100 || len(got.Components) != 5 || got.Components[0].Code != "skills" || got.Components[0].Score != 100 {
 		t.Fatalf("unexpected match result: %+v", got)
+	}
+}
+
+func TestSkillScoreDoesNotTrustGoTagWithoutProgrammingContext(t *testing.T) {
+	profileSkills := []profiledomain.Skill{{Name: "Go"}}
+	jobSkills := []jobdomain.JobSkill{{Name: "Go"}}
+	if got := skillScore(profileSkills, jobSkills, "Customer Success\nPlease go above and beyond for our customers."); got != 50 {
+		t.Fatalf("ordinary use of go received skill credit: %d", got)
+	}
+	if got := skillScore(profileSkills, jobSkills, "Senior Go Engineer\nBuild APIs in Go."); got != 100 {
+		t.Fatalf("technical Go mention did not receive skill credit: %d", got)
 	}
 }
 

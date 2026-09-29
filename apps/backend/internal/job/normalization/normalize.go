@@ -143,12 +143,44 @@ func ExtractSkills(text string, vocabulary []SkillTerm) []jobdomain.JobSkill {
 		if term.ID == "" || term.Name == "" || term.Normalized == "" || seen[term.ID] {
 			continue
 		}
-		if containsTerm(text, term.Name) || containsTerm(text, term.Normalized) {
+		matched := ContainsSkill(text, term.Name) || ContainsSkill(text, term.Normalized)
+		if matched {
 			result = append(result, jobdomain.JobSkill{ID: term.ID, Name: term.Name, Required: false, Confidence: 0.78})
 			seen[term.ID] = true
 		}
 	}
 	return result
+}
+
+func ContainsSkill(text, skill string) bool {
+	if strings.EqualFold(strings.TrimSpace(skill), "go") {
+		return containsGoTechnology(text)
+	}
+	return containsTerm(text, skill)
+}
+
+// Go is also a common English verb. Treat it as a skill only with explicit
+// programming context; the exact-word boundary alone is not sufficient.
+func containsGoTechnology(text string) bool {
+	if containsTerm(text, "golang") {
+		return true
+	}
+	for lineNumber, line := range strings.Split(text, "\n") {
+		if !containsTerm(line, "go") {
+			continue
+		}
+		value := strings.ToLower(line)
+		if strings.Contains(value, "go-to-market") || strings.Contains(value, "go to market") {
+			continue
+		}
+		if lineNumber == 0 && containsAny(value, "engineer", "developer", "programmer", "software", "backend", "back-end", "platform", "sre") {
+			return true
+		}
+		if containsAny(value, "programming language", "programming languages", "language:", "languages:", "tech stack", "technology stack", "technologies:", "skills:", "written in go", "go developer", "go engineer", "go backend", "go services", "go microservices", "goroutine") {
+			return true
+		}
+	}
+	return false
 }
 
 func ClassifySeniority(title string) jobdomain.Seniority {

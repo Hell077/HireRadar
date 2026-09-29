@@ -3,13 +3,16 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/language"
+	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	profiledomain "github.com/Hell077/HireRadar/apps/backend/internal/profile/domain"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
@@ -328,25 +331,88 @@ func queryUserJobFeedback(ctx context.Context, exec matchExecer, userID user.Use
 }
 
 func (s *Store) ListMatches(ctx context.Context, userID user.UserID, limit int) ([]engine.Result, error) {
-	rows, err := s.pool.Query(ctx, `SELECT m.job_id::text,m.score,m.components::text FROM user_job_matches m WHERE m.user_id=$1
-		AND NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=m.user_id AND f.job_id=m.job_id AND f.feedback_type IN ('hidden','not_interested','applied'))
-		ORDER BY m.score DESC,m.computed_at DESC,m.job_id LIMIT $2`, string(userID), limit)
+	page, err := s.ListMatchPage(ctx, userID, "", limit)
+	return page.Matches, err
+}
+
+type matchCursor struct {
+	Score      int       `json:"s"`
+	ComputedAt time.Time `json:"t"`
+	JobID      string    `json:"j"`
+}
+
+func (s *Store) ListMatchPage(ctx context.Context, userID user.UserID, cursor string, limit int) (matchapp.MatchPage, error) {
+	if limit == 0 {
+		limit = 25
+	}
+	if limit < 1 || limit > 100 {
+		return matchapp.MatchPage{}, fmt.Errorf("match page limit must be between 1 and 100")
+	}
+	args := []any{string(userID)}
+	conditions := []string{"m.user_id=$1", "NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=m.user_id AND f.job_id=m.job_id AND f.feedback_type IN ('hidden','not_interested','applied'))"}
+	if cursor != "" {
+		decoded, err := decodeMatchCursor(cursor)
+		if err != nil {
+			return matchapp.MatchPage{}, err
+		}
+		args = append(args, decoded.Score, decoded.ComputedAt, decoded.JobID)
+		conditions = append(conditions, fmt.Sprintf("(m.score,m.computed_at,m.job_id)<($%d,$%d,$%d::uuid)", len(args)-2, len(args)-1, len(args)))
+	}
+	args = append(args, limit+1)
+	query := `SELECT m.job_id::text,m.score,m.components::text,m.computed_at FROM user_job_matches m WHERE ` + strings.Join(conditions, " AND ") + fmt.Sprintf(" ORDER BY m.score DESC,m.computed_at DESC,m.job_id DESC LIMIT $%d", len(args))
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list candidate matches: %w", err)
+		return matchapp.MatchPage{}, fmt.Errorf("list candidate matches: %w", err)
 	}
 	defer rows.Close()
-	result := []engine.Result{}
+	type entry struct {
+		result engine.Result
+		cursor matchCursor
+	}
+	items := []entry{}
 	for rows.Next() {
 		var item engine.Result
 		var components []byte
-		if err := rows.Scan(&item.JobID, &item.Score, &components); err != nil {
-			return nil, err
+		var computedAt time.Time
+		if err := rows.Scan(&item.JobID, &item.Score, &components, &computedAt); err != nil {
+			return matchapp.MatchPage{}, err
 		}
 		item.Eligible = true
 		if err := json.Unmarshal(components, &item.Components); err != nil {
-			return nil, fmt.Errorf("decode match explanation: %w", err)
+			return matchapp.MatchPage{}, fmt.Errorf("decode match explanation: %w", err)
 		}
-		result = append(result, item)
+		items = append(items, entry{result: item, cursor: matchCursor{Score: item.Score, ComputedAt: computedAt, JobID: item.JobID}})
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return matchapp.MatchPage{}, err
+	}
+	page := matchapp.MatchPage{Matches: make([]engine.Result, 0, limit)}
+	if len(items) > limit {
+		items = items[:limit]
+		page.NextCursor = encodeMatchCursor(items[len(items)-1].cursor)
+	}
+	for _, item := range items {
+		page.Matches = append(page.Matches, item.result)
+	}
+	return page, nil
+}
+
+func encodeMatchCursor(cursor matchCursor) string {
+	data, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func decodeMatchCursor(value string) (matchCursor, error) {
+	data, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return matchCursor{}, jobdomain.ErrInvalidCursor
+	}
+	var cursor matchCursor
+	if err := json.Unmarshal(data, &cursor); err != nil || cursor.Score < 0 || cursor.Score > 100 || cursor.ComputedAt.IsZero() {
+		return matchCursor{}, jobdomain.ErrInvalidCursor
+	}
+	if _, err := uuid.Parse(cursor.JobID); err != nil {
+		return matchCursor{}, jobdomain.ErrInvalidCursor
+	}
+	return cursor, nil
 }
