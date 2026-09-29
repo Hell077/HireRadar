@@ -185,7 +185,7 @@ func (w *Worker) resolveCandidate(ctx context.Context, candidate domain.Candidat
 	}
 	provider := *result.Provider
 	switch provider.Type {
-	case "greenhouse", "lever", "ashby":
+	case "greenhouse", "lever", "ashby", "workable":
 	default:
 		return w.store.CandidateReview(ctx, candidate.ID, provider, "provider detected but connector is not available")
 	}

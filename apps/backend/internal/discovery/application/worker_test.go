@@ -108,15 +108,15 @@ func TestInvalidATSBoardDoesNotCreateSource(t *testing.T) {
 	}
 }
 
-func TestUnsupportedATSIsRetainedWithoutCreatingSource(t *testing.T) {
-	store := &candidateStore{}
-	ats := &fixedATS{}
+func TestWorkableATSUsesPublicFeedAndCreatesSource(t *testing.T) {
+	store := &candidateStore{sourceID: "workable-example", created: true}
+	ats := &fixedATS{result: sourcedomain.FetchResult{Jobs: []sourcedomain.ExternalJob{{ExternalID: "posting"}}}}
 	provider := domain.DetectedProvider{Type: "workable", Key: "acme", URL: "https://apply.workable.com/acme", Confidence: 0.99}
 	worker := NewWorker(store, nil, fixedResolver{result: domain.Resolution{Provider: &provider}}, ats, 1)
 	if err := worker.resolveCandidate(context.Background(), domain.Candidate{ID: "candidate", Kind: domain.CompanyTarget, Name: "Acme", WebsiteURL: "https://example.org"}); err != nil {
 		t.Fatal(err)
 	}
-	if ats.calls != 0 || store.createCalls != 0 || store.provider != "workable" {
+	if ats.calls != 1 || store.createCalls != 1 || store.provider != "workable" || store.state != "source_created" {
 		t.Fatalf("verification calls=%d source registrations=%d detected=%s", ats.calls, store.createCalls, store.provider)
 	}
 }

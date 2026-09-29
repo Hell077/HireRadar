@@ -380,7 +380,9 @@ func DetectURL(parsed *url.URL) *domain.DetectedProvider {
 		}
 	case host == "apply.workable.com" || strings.HasSuffix(host, ".workable.com"):
 		provider = "workable"
-		if len(parts) > 0 {
+		if host == "apply.workable.com" && (len(parts) == 0 || parts[0] == "j") {
+			provider = ""
+		} else if len(parts) > 0 {
 			key = parts[0]
 		}
 	case strings.HasSuffix(host, ".teamtailor.com") || strings.HasSuffix(host, ".teamtailor.site"):

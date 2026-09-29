@@ -25,6 +25,7 @@ func TestDetectSupportedAndUnsupportedATS(t *testing.T) {
 		{"https://jobs.smartrecruiters.com/Acme", "smartrecruiters", "Acme"},
 		{"https://apply.workable.com/acme/j/123", "workable", "acme"},
 		{"https://acme.teamtailor.com/jobs", "teamtailor", "acme"},
+		{"https://apply.workable.com/huggingface/", "workable", "huggingface"},
 		{"https://acme.jobs.personio.com/job/123", "personio", "acme"},
 		{"https://acme.wd5.myworkdayjobs.com/en-US/careers", "workday", "acme.wd5.myworkdayjobs.com/en-US"},
 	}
@@ -39,6 +40,13 @@ func TestDetectSupportedAndUnsupportedATS(t *testing.T) {
 				t.Fatalf("detected %#v, want %s/%s", got, test.provider, test.key)
 			}
 		})
+	}
+}
+
+func TestDetectDoesNotTreatWorkableJobPathAsAccountKey(t *testing.T) {
+	page, _ := url.Parse("https://apply.workable.com/j/AB12CD34/apply")
+	if got := Detect(page, nil); got != nil {
+		t.Fatalf("job-specific apply URL yielded account key: %+v", got)
 	}
 }
 

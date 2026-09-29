@@ -252,7 +252,7 @@ func candidateState(provider string) string {
 		return "manual_review"
 	}
 	switch provider {
-	case "greenhouse", "lever", "ashby":
+	case "greenhouse", "lever", "ashby", "workable":
 		return "verified"
 	case "github":
 		return "verified"
