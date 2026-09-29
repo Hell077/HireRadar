@@ -174,8 +174,10 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 			updatedCount++
 		}
 	}
-	if err := w.jobs.CloseMissing(ctx, tx, source.ID, runID); err != nil {
-		return 0, 0, err
+	if result.AuthoritativeSnapshot {
+		if err := w.jobs.CloseMissing(ctx, tx, source.ID, runID); err != nil {
+			return 0, 0, err
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE sources SET cursor=$2::jsonb,last_sync_at=now(),next_sync_at=now()+make_interval(secs=>sync_interval_seconds),updated_at=now() WHERE id=$1`, source.ID, nonNullJSON(result.NextCursor)); err != nil {
 		return 0, 0, err

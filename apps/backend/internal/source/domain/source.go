@@ -11,10 +11,13 @@ var ErrInvalidSource = errors.New("invalid source")
 type Type string
 
 const (
-	Greenhouse Type = "greenhouse"
-	Lever      Type = "lever"
-	Ashby      Type = "ashby"
-	GitHub     Type = "github"
+	Greenhouse     Type = "greenhouse"
+	Lever          Type = "lever"
+	Ashby          Type = "ashby"
+	GitHub         Type = "github"
+	RemoteOK       Type = "remoteok"
+	Jobicy         Type = "jobicy"
+	WeWorkRemotely Type = "weworkremotely"
 )
 
 type Source struct {
@@ -48,6 +51,7 @@ type ExternalJob struct {
 }
 
 type FetchResult struct {
-	Jobs       []ExternalJob
-	NextCursor json.RawMessage
+	Jobs                  []ExternalJob
+	NextCursor            json.RawMessage
+	AuthoritativeSnapshot bool
 }

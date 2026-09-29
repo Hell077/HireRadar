@@ -161,6 +161,43 @@ func TestATSBoardsDistinguishValidEmptySnapshotsFromInvalidPayloads(t *testing.T
 	}
 }
 
+func TestPublicRollingFeedsParseRealisticPayloadsWithoutClaimingSnapshot(t *testing.T) {
+	tests := []struct {
+		name  string
+		typ   domain.Type
+		body  string
+		check func(domain.ExternalJob) bool
+	}{
+		{name: "RemoteOK", typ: domain.RemoteOK, body: `[{"legal":"Public API"},{"id":123,"position":"Senior Go Engineer","company":"Acme","url":"https://remoteok.com/remote-jobs/123","location":"Worldwide","date":"2026-09-28T12:00:00Z","description":"Build Go services"}]`, check: func(j domain.ExternalJob) bool {
+			return j.ExternalID == "123" && j.Title == "Senior Go Engineer" && j.CompanyName == "Acme"
+		}},
+		{name: "Jobicy", typ: domain.Jobicy, body: `{"count":1,"jobs":[{"id":456,"jobTitle":"Backend Engineer","companyName":"Example","url":"https://jobicy.com/jobs/456","jobDescription":"Go and PostgreSQL","jobGeo":"Anywhere","jobType":["Full Time","Contract"],"pubDate":"2026-09-28T12:00:00Z"}]}`, check: func(j domain.ExternalJob) bool {
+			return j.ExternalID == "456" && j.EmploymentType == "Full Time, Contract" && j.Location == "Anywhere"
+		}},
+		{name: "We Work Remotely", typ: domain.WeWorkRemotely, body: `<rss version="2.0"><channel><title>Jobs</title><item><title>Acme: Senior Go Engineer</title><region>Anywhere in the World</region><country></country><type>Full-Time</type><description>&lt;p&gt;Build Go services&lt;/p&gt;</description><pubDate>Mon, 28 Sep 2026 12:00:00 +0000</pubDate><guid>https://weworkremotely.com/remote-jobs/acme-senior-go-engineer</guid><link>https://weworkremotely.com/remote-jobs/acme-senior-go-engineer</link></item></channel></rss>`, check: func(j domain.ExternalJob) bool {
+			return j.CompanyName == "Acme" && j.Title == "Senior Go Engineer" && j.EmploymentType == "Full-Time"
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := NewRegistry()
+			r.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Header.Get("User-Agent") == "" {
+					t.Fatal("request omitted identifiable User-Agent")
+				}
+				return response(test.body), nil
+			})
+			got, err := r.Fetch(context.Background(), domain.Source{Type: test.typ})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.AuthoritativeSnapshot || len(got.Jobs) != 1 || !test.check(got.Jobs[0]) || got.Jobs[0].PublishedAt == nil {
+				t.Fatalf("unexpected rolling feed result: %+v", got)
+			}
+		})
+	}
+}
+
 func response(body string) *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
 }

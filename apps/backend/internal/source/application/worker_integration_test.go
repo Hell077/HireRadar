@@ -86,6 +86,30 @@ func TestSourceWorkerPersistsReplayableSnapshotsAndIsolatesFailures(t *testing.T
 	if !json.Valid([]byte(payload)) {
 		t.Fatalf("stored payload is not replayable JSON: %q", payload)
 	}
+	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}}}
+	for range 2 {
+		if err := w.syncSource(ctx, domain.Source{ID: sourceID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pool.QueryRow(ctx, `SELECT j.status FROM jobs j JOIN job_sources js ON js.job_id=j.id WHERE js.source_id=$1 AND js.external_id='posting-1'`, sourceID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "active" {
+		t.Fatalf("rolling partial feed closed an older job: %q", status)
+	}
+	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, AuthoritativeSnapshot: true}}
+	for range 2 {
+		if err := w.syncSource(ctx, domain.Source{ID: sourceID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pool.QueryRow(ctx, `SELECT j.status FROM jobs j JOIN job_sources js ON js.job_id=j.id WHERE js.source_id=$1 AND js.external_id='posting-1'`, sourceID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "closed" {
+		t.Fatalf("successful authoritative snapshots did not close missing job: %q", status)
+	}
 	bad := NewWorker(pool, fixtureFetcher{err: context.DeadlineExceeded}, 1)
 	if err := bad.syncSource(ctx, domain.Source{ID: badID}); err == nil {
 		t.Fatal("expected source fetch failure")

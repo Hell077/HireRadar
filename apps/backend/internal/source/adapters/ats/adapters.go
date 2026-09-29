@@ -43,6 +43,12 @@ func (r *Registry) Fetch(ctx context.Context, source domain.Source) (domain.Fetc
 		return r.fetchAshby(ctx, source)
 	case domain.GitHub:
 		return r.fetchGitHub(ctx, source)
+	case domain.RemoteOK:
+		return r.fetchRemoteOK(ctx, source)
+	case domain.Jobicy:
+		return r.fetchJobicy(ctx, source)
+	case domain.WeWorkRemotely:
+		return r.fetchWeWorkRemotely(ctx, source)
 	default:
 		return domain.FetchResult{}, fmt.Errorf("unsupported source type %q", source.Type)
 	}
@@ -81,6 +87,7 @@ func (r *Registry) get(ctx context.Context, endpoint string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "HireRadar/1.0 (+https://github.com/Hell077/HireRadar)")
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -140,6 +147,7 @@ func (r *Registry) fetchGreenhouse(ctx context.Context, source domain.Source) (d
 		published := parseTime(item.Updated)
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(item.ID, 10), CompanyName: source.CompanyName, Title: item.Title, Description: item.Content, Location: item.Location.Name, ApplyURL: item.URL, PublishedAt: published, Raw: raw})
 	}
+	result.AuthoritativeSnapshot = true
 	return result, nil
 }
 
@@ -197,6 +205,7 @@ func (r *Registry) fetchLever(ctx context.Context, source domain.Source) (domain
 			result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Text, Description: item.Description, Location: item.Categories.Location, EmploymentType: item.Categories.Commitment, ApplyURL: item.URL, PublishedAt: published, Raw: item.Raw})
 		}
 		if len(items) < cfg.Limit {
+			result.AuthoritativeSnapshot = true
 			return result, nil
 		}
 	}
@@ -253,6 +262,7 @@ func (r *Registry) fetchAshby(ctx context.Context, source domain.Source) (domain
 		}
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Title, Description: item.Description, Location: item.Location, EmploymentType: item.EmploymentType, ApplyURL: item.URL, PublishedAt: parseTime(item.Published), Raw: raw})
 	}
+	result.AuthoritativeSnapshot = true
 	return result, nil
 }
 
@@ -374,6 +384,7 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 			result.NextCursor, _ = json.Marshal(struct {
 				LastPage int `json:"last_page"`
 			}{page})
+			result.AuthoritativeSnapshot = true
 			return result, nil
 		}
 	}
