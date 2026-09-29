@@ -12,10 +12,13 @@ import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { ResumeSuggestions } from "@/components/onboarding/resume-suggestions";
 import { getLatestResumeAnalysis } from "@/app/resume-actions";
+import { saveOnboardingProfessional } from "@/app/profile-actions";
+import { getCandidateData } from "@/lib/api/server";
 
 export default async function OnboardingReviewPage() {
   const t = await getTranslations("onboarding");
   const result = await getLatestResumeAnalysis();
+  const candidate = await getCandidateData();
   const analysis = result?.analysis;
   return (
     <OnboardingShell
@@ -35,54 +38,72 @@ export default async function OnboardingReviewPage() {
       )}
 
       <div className="space-y-5">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("summary")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5 sm:grid-cols-2">
-            <AuthField
-              id="review-role"
-              label={t("primaryRole")}
-              name="role"
-              defaultValue={analysis?.positions?.[0]?.title ?? ""}
-              readOnly
-            />
-            <AuthField
-              id="review-experience"
-              label={t("experience")}
-              name="experience"
-              type="number"
-              defaultValue={
-                analysis
-                  ? String(Math.round(analysis.total_experience_months / 12))
-                  : ""
-              }
-              readOnly
-            />
-            <div className="sm:col-span-2">
-              <p className="text-sm font-medium">{t("languagesDetected")}</p>
-              {analysis?.languages?.length ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {analysis.languages.map((language) => (
-                    <span
-                      className="rounded-full bg-secondary px-3 py-1 text-sm font-medium"
-                      key={language}
-                    >
-                      {language.toUpperCase()}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("noLanguagesDetected")}
+        <form id="professional-profile" action={saveOnboardingProfessional}>
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle>{t("summary")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-5 sm:grid-cols-2">
+              <AuthField
+                id="review-role"
+                label={t("primaryRole")}
+                name="role"
+                defaultValue={
+                  analysis?.positions?.[0]?.title ??
+                  candidate?.positions?.[0] ??
+                  ""
+                }
+                required
+              />
+              <AuthField
+                id="review-experience"
+                label={t("experience")}
+                name="experience"
+                type="number"
+                defaultValue={
+                  analysis
+                    ? String(Math.round(analysis.total_experience_months / 12))
+                    : candidate?.profile.experience_years
+                }
+                min={0}
+                max={60}
+              />
+              <div className="sm:col-span-2">
+                <AuthField
+                  id="review-skills"
+                  label={t("skillsManual")}
+                  name="skills"
+                  defaultValue={candidate?.skills
+                    .map((skill) => skill.name)
+                    .join(", ")}
+                  placeholder={t("skillsPlaceholder")}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-sm font-medium">{t("languagesDetected")}</p>
+                {analysis?.languages?.length ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {analysis.languages.map((language) => (
+                      <span
+                        className="rounded-full bg-secondary px-3 py-1 text-sm font-medium"
+                        key={language}
+                      >
+                        {language.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("noLanguagesDetected")}
+                  </p>
+                )}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("languageFilterDescription")}
                 </p>
-              )}
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("languageFilterDescription")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
 
         <Card>
           <CardHeader>
@@ -134,8 +155,10 @@ export default async function OnboardingReviewPage() {
 
       <OnboardingActions
         backHref="/onboarding/resume"
+        form="professional-profile"
         nextHref="/onboarding/preferences"
         nextLabel={t("confirm")}
+        submit
       />
     </OnboardingShell>
   );

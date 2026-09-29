@@ -257,7 +257,8 @@
     "firstName": "First name",
     "lastName": "Last name",
     "seniority": "Seniority",
-    "country": "Country code",
+    "chooseSeniority": "Choose seniority",
+    "country": "Country",
     "city": "City",
     "cityPlaceholder": "Almaty",
     "step": "Step {current} of 4",
@@ -305,6 +306,8 @@
     "noLanguagesDetected": "No languages were identified. Language filtering will stay off until your resume lists them.",
     "languageFilterDescription": "Jobs written in other languages or requiring a language you do not list are left out of your recommendations.",
     "skills": "Detected skills",
+    "skillsManual": "Skills separated by commas",
+    "skillsPlaceholder": "Go, PostgreSQL, React, TypeScript",
     "addSkill": "+ Add skill",
     "recentExperience": "Recent experience",
     "company": "Company",
@@ -329,8 +332,9 @@
     "fulltime": "Full-time",
     "fulltimeHelp": "Remote permanent positions",
     "telegram": "Telegram notifications",
+    "telegramNotConnected": "Telegram is not connected yet",
     "connectTelegram": "Connect Telegram after setup",
-    "telegramHelp": "Receive high-quality matches without checking the website. We’ll open the bot after you finish.",
+    "telegramHelp": "You can connect the bot later in profile settings.",
     "finish": "Finish setup"
   }
 }

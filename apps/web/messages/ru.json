@@ -257,7 +257,8 @@
     "firstName": "Имя",
     "lastName": "Фамилия",
     "seniority": "Уровень",
-    "country": "Код страны",
+    "chooseSeniority": "Выберите уровень",
+    "country": "Страна",
     "city": "Город",
     "cityPlaceholder": "Алматы",
     "step": "Шаг {current} из 4",
@@ -305,6 +306,8 @@
     "noLanguagesDetected": "Не удалось определить языки. Фильтр включится, когда языки будут указаны в резюме.",
     "languageFilterDescription": "В рекомендациях не будет вакансий, написанных на других языках или требующих язык, которого нет в резюме.",
     "skills": "Найденные навыки",
+    "skillsManual": "Навыки через запятую",
+    "skillsPlaceholder": "Go, PostgreSQL, React, TypeScript",
     "addSkill": "+ Добавить навык",
     "recentExperience": "Последнее место работы",
     "company": "Компания",
@@ -329,8 +332,9 @@
     "fulltime": "Полная занятость",
     "fulltimeHelp": "Постоянная удалённая работа",
     "telegram": "Уведомления в Telegram",
+    "telegramNotConnected": "Telegram пока не подключён",
     "connectTelegram": "Подключить Telegram после настройки",
-    "telegramHelp": "Получайте лучшие вакансии, не заходя на сайт. После завершения мы откроем бота.",
+    "telegramHelp": "Подключить бота можно позже в настройках профиля.",
     "finish": "Завершить настройку"
   }
 }

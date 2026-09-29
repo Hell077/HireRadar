@@ -111,13 +111,20 @@ export default async function OnboardingPreferencesPage({
               <CardTitle>{t("telegram")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <ChoiceCard
-                name="telegram"
-                label={t("connectTelegram")}
-                description={t("telegramHelp")}
-                icon={<Send className="size-4" aria-hidden="true" />}
-                checked
-              />
+              <div className="flex items-start gap-3 rounded-xl bg-secondary/50 p-4">
+                <Send
+                  className="mt-0.5 size-5 shrink-0 text-primary"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-sm font-semibold">
+                    {t("telegramNotConnected")}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("telegramHelp")}
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

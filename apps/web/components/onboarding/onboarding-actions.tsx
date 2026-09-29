@@ -6,6 +6,7 @@ import { Button } from "@repo/ui/components/button";
 
 type OnboardingActionsProps = {
   backHref?: string;
+  form?: string;
   nextHref: string;
   nextLabel?: string;
   submit?: boolean;
@@ -13,6 +14,7 @@ type OnboardingActionsProps = {
 
 export async function OnboardingActions({
   backHref,
+  form,
   nextHref,
   nextLabel,
   submit = false,
@@ -31,7 +33,7 @@ export async function OnboardingActions({
         <span />
       )}
       {submit ? (
-        <Button type="submit" size="lg">
+        <Button type="submit" size="lg" form={form}>
           {nextLabel ?? t("continue")}
           <ArrowRight aria-hidden="true" />
         </Button>

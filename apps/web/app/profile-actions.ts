@@ -61,6 +61,67 @@ export async function saveOnboardingProfile(formData: FormData) {
   redirect("/onboarding/resume");
 }
 
+export async function saveOnboardingProfessional(formData: FormData) {
+  const role = text(formData, "role");
+  const experience = Number(text(formData, "experience"));
+  const skills = text(formData, "skills")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => ({ name }));
+  const currentResponse = await authenticatedRequest(
+    "/api/v1/profile",
+    {},
+    true,
+  ).catch(() => null);
+  if (!currentResponse?.ok || !role) {
+    redirect("/onboarding/review?error=1");
+  }
+  const current = (await currentResponse.json()) as {
+    first_name: string;
+    last_name: string;
+    country: string;
+    city: string;
+    timezone: string;
+    experience_years: number;
+    seniority: string;
+    desired_salary?: { amount: number; currency: string } | null;
+  };
+  const put = (path: string, body: unknown) =>
+    authenticatedRequest(
+      path,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      true,
+    );
+  const responses = await Promise.all([
+    put("/api/v1/profile", {
+      first_name: current.first_name,
+      last_name: current.last_name,
+      country: current.country,
+      city: current.city,
+      timezone: current.timezone,
+      experience_years: Number.isFinite(experience)
+        ? experience
+        : current.experience_years,
+      seniority: current.seniority,
+      ...(current.desired_salary
+        ? { desired_salary: current.desired_salary }
+        : {}),
+    }),
+    put("/api/v1/profile/positions", { positions: [role] }),
+    put("/api/v1/profile/skills", { skills }),
+  ]).catch(() => []);
+  if (responses.length !== 3 || responses.some((response) => !response?.ok)) {
+    redirect("/onboarding/review?error=1");
+  }
+  revalidatePath("/");
+  redirect("/onboarding/preferences");
+}
+
 export async function updateSkills(formData: FormData) {
   const skills = formData
     .getAll("skills")
