@@ -10,12 +10,16 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -ldflags "-X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.Version=${VERSION} -X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.Commit=${GIT_COMMIT} -X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.BuildTime=${BUILD_TIME}" \
-    -o /out/api ./cmd
+    -o /out/api ./cmd && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags "-X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.Version=${VERSION} -X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.Commit=${GIT_COMMIT} -X github.com/Hell077/HireRadar/apps/backend/internal/buildinfo.BuildTime=${BUILD_TIME}" \
+    -o /out/telegram-bot ./cmd/telegram-bot
 
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata && \
     addgroup -S app && adduser -S -G app -u 10001 app
 COPY --from=build --chown=10001:10001 /out/api /app/api
+COPY --from=build --chown=10001:10001 /out/telegram-bot /app/telegram-bot
 USER app
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]

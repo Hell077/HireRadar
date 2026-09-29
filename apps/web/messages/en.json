@@ -83,7 +83,9 @@
     "sourcesEnabled": "8 sources enabled",
     "sourcesEnabledCount": "{count} sources enabled",
     "sourcesList": "Greenhouse, Lever, Ashby, Remotive and 4 more",
-    "confirmed": "Resume data confirmed"
+    "confirmed": "Resume data confirmed",
+    "telegramReconnectRequired": "Telegram needs to be reconnected.",
+    "reconnectTelegram": "Reconnect Telegram"
   },
   "profileEditor": {
     "firstName": "First name",
@@ -214,7 +216,9 @@
     "disconnect": "Disconnect",
     "save": "Save settings",
     "saved": "Settings saved",
-    "saveError": "Could not save settings. Check the values and backend availability."
+    "saveError": "Could not save settings. Check the values and backend availability.",
+    "telegramReconnectRequired": "The bot was blocked or disabled. Reconnect it to resume delivery.",
+    "reconnect": "Reconnect"
   },
   "auth": {
     "eyebrow": "Focused remote job search",

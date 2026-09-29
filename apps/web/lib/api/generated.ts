@@ -1812,6 +1812,7 @@ export interface components {
              */
             readonly $schema?: string;
             connected: boolean;
+            enabled?: boolean;
             /** Format: date-time */
             connected_at?: string;
             username?: string;

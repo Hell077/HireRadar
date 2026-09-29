@@ -82,7 +82,9 @@
     "sourcesEnabled": "Подключено источников: 8",
     "sourcesEnabledCount": "Подключено источников: {count}",
     "sourcesList": "Greenhouse, Lever, Ashby, Remotive и ещё 4",
-    "confirmed": "Данные резюме подтверждены"
+    "confirmed": "Данные резюме подтверждены",
+    "telegramReconnectRequired": "Telegram нужно подключить заново.",
+    "reconnectTelegram": "Подключить Telegram заново"
   },
   "profileEditor": {
     "firstName": "Имя",
@@ -214,7 +216,9 @@
     "disconnect": "Отключить",
     "save": "Сохранить настройки",
     "saved": "Настройки сохранены",
-    "saveError": "Не удалось сохранить настройки. Проверьте значения и доступность backend."
+    "saveError": "Не удалось сохранить настройки. Проверьте значения и доступность backend.",
+    "telegramReconnectRequired": "Бот заблокирован или отключён. Подключите его заново, чтобы получать уведомления.",
+    "reconnect": "Подключить заново"
   },
   "auth": {
     "eyebrow": "Сфокусированный поиск удалённой работы",

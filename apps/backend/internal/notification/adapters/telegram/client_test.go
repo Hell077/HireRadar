@@ -3,9 +3,14 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 )
 
 func TestSendMessageUsesTelegramInlineButtons(t *testing.T) {
@@ -68,5 +73,37 @@ func TestSetWebhookUsesSecretTokenAndAllowedUpdates(t *testing.T) {
 	client := NewClientWithBaseURL("token", server.URL, server.Client())
 	if err := client.SetWebhook(context.Background(), "https://example.test/webhooks/telegram", "secret"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRateLimitErrorPreservesRetryAfterWithoutToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/botsensitive-test-token/sendMessage" {
+			t.Errorf("wrong Telegram endpoint path: %q", r.URL.Path)
+		}
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"ok":false,"description":"Too Many Requests","parameters":{"retry_after":5}}`))
+	}))
+	defer server.Close()
+	client := NewClientWithBaseURL("sensitive-test-token", server.URL, server.Client())
+	err := client.SendMessage(context.Background(), 1, "hi", nil)
+	var apiErr *application.TelegramAPIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusTooManyRequests || apiErr.RetryAfter != 5*time.Second || strings.Contains(err.Error(), "sensitive-test-token") {
+		t.Fatalf("rate limit error = %+v", err)
+	}
+}
+
+func TestBlockedTelegramAccountErrorIsTerminal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"ok":false,"description":"bot was blocked by the user"}`))
+	}))
+	defer server.Close()
+	client := NewClientWithBaseURL("token", server.URL, server.Client())
+	err := client.SendMessage(context.Background(), 1, "hi", nil)
+	var apiErr *application.TelegramAPIError
+	if !errors.As(err, &apiErr) || !apiErr.Blocked {
+		t.Fatalf("blocked error = %+v", err)
 	}
 }

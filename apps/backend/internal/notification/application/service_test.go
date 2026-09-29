@@ -22,6 +22,10 @@ type serviceStore struct {
 	openURL                   string
 	openScore, openConfidence int
 	firstOpen                 bool
+	commandLinked             bool
+	commandPreferences        domain.NotificationPreferences
+	commandJobs               []RecommendedJob
+	notificationsEnabled      bool
 }
 
 func (s *serviceStore) CreateLink(_ context.Context, _ user.UserID, _ string, hash []byte, _ time.Time) error {
@@ -55,6 +59,20 @@ func (s *serviceStore) SaveFeedbackReason(_ context.Context, _ int64, jobID, rea
 }
 func (s *serviceStore) OpenNotification(context.Context, string) (string, int, int, bool, error) {
 	return s.openURL, s.openScore, s.openConfidence, s.firstOpen, nil
+}
+func (s *serviceStore) AccountByTelegramID(context.Context, int64) (user.UserID, domain.NotificationPreferences, bool, error) {
+	prefs := s.commandPreferences
+	if prefs.Timezone == "" {
+		prefs = domain.DefaultPreferences()
+	}
+	return "test-user", prefs, s.commandLinked, nil
+}
+func (s *serviceStore) RecentMatchesForTelegram(context.Context, int64, int) ([]RecommendedJob, error) {
+	return s.commandJobs, nil
+}
+func (s *serviceStore) SetNotificationsEnabled(_ context.Context, _ int64, enabled bool) error {
+	s.notificationsEnabled = enabled
+	return nil
 }
 
 type serviceBot struct {
@@ -123,6 +141,12 @@ func TestCallbackChecksActionAndAcknowledgesOwnedFeedback(t *testing.T) {
 	if err := service.HandleCallback(context.Background(), 10, "query-id", "job:delete:"+jobID); !errors.Is(err, ErrInvalidCallback) {
 		t.Fatalf("invalid callback error=%v", err)
 	}
+	if err := service.HandleCallback(context.Background(), 10, "query-id", "job:relevant:"+jobID); err != nil || store.action != "relevant" || !strings.Contains(bot.answer, "look for more") {
+		t.Fatalf("positive feedback action=%q answer=%q err=%v", store.action, bot.answer, err)
+	}
+	if err := service.HandleCallback(context.Background(), 10, "query-id", "job:not_relevant:"+jobID); err != nil || store.action != "not_relevant" || !strings.Contains(bot.answer, "Hidden") {
+		t.Fatalf("negative feedback action=%q answer=%q err=%v", store.action, bot.answer, err)
+	}
 }
 
 func TestHideOffersOptionalReasonAndReasonCallbackPersists(t *testing.T) {
@@ -186,5 +210,57 @@ func TestApplicationAnswerCallbackDecodesExplicitAnswer(t *testing.T) {
 	}
 	if answerer.telegramID != 42 || answerer.questionID != questionID || answerer.answer != "Yes" || bot.answer != "Answer saved" {
 		t.Fatalf("answer callback was not handled: %+v response=%q", answerer, bot.answer)
+	}
+}
+
+func TestTelegramCommandsRequirePrivateLinkedAccountAndControlNotifications(t *testing.T) {
+	store, bot := &serviceStore{commandLinked: true, commandPreferences: domain.DefaultPreferences()}, &serviceBot{}
+	service := NewService(store, "", time.Now, bot)
+	if err := service.HandleMessage(context.Background(), 10, 10, "private", "candidate", "/status"); err != nil || !strings.Contains(bot.text, "Minimum match score") {
+		t.Fatalf("status text=%q err=%v", bot.text, err)
+	}
+	if err := service.HandleMessage(context.Background(), 10, 10, "private", "candidate", "/stop"); err != nil || store.notificationsEnabled || !strings.Contains(bot.text, "paused") {
+		t.Fatalf("stop enabled=%t text=%q err=%v", store.notificationsEnabled, bot.text, err)
+	}
+	if err := service.HandleMessage(context.Background(), 10, 10, "private", "candidate", "/resume"); err != nil || !store.notificationsEnabled || !strings.Contains(bot.text, "enabled") {
+		t.Fatalf("resume enabled=%t text=%q err=%v", store.notificationsEnabled, bot.text, err)
+	}
+	if err := service.HandleMessage(context.Background(), 10, -100, "group", "candidate", "/stop"); err != nil || !store.notificationsEnabled {
+		t.Fatalf("group command changed settings: err=%v", err)
+	}
+}
+
+func TestTelegramJobsCommandUsesMatchesAndProvidesFeedbackButtons(t *testing.T) {
+	jobID := "b2d45992-9a64-42f3-92a8-b511562184d2"
+	store := &serviceStore{commandLinked: true, commandJobs: []RecommendedJob{{JobID: jobID, Title: "Senior Go Engineer", Company: "Example", Location: "Worldwide", Score: 87, ApplyURL: "https://jobs.example/apply"}}}
+	bot := &serviceBot{}
+	service := NewService(store, "", time.Now, bot)
+	if err := service.HandleMessage(context.Background(), 42, 42, "private", "alex", "/jobs"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(bot.text, "87%") || len(bot.buttons) != 2 || bot.buttons[0][0].URL != "https://jobs.example/apply" || bot.buttons[1][0].CallbackData != "job:relevant:"+jobID || bot.buttons[1][1].CallbackData != "job:not_relevant:"+jobID {
+		t.Fatalf("unexpected recommendation: %q %+v", bot.text, bot.buttons)
+	}
+}
+
+func TestInvalidTelegramCallbackIsAcknowledged(t *testing.T) {
+	bot := &serviceBot{}
+	service := NewService(&serviceStore{}, "", time.Now, bot)
+	if err := service.HandleCallback(context.Background(), 42, "invalid-query", "job:unknown:bad-id"); !errors.Is(err, ErrInvalidCallback) {
+		t.Fatalf("callback error=%v", err)
+	}
+	if bot.answer != "This action is no longer available" {
+		t.Fatalf("callback response=%q", bot.answer)
+	}
+}
+
+func TestTelegramHelpWorksWithoutLinkAndStartExplainsLinking(t *testing.T) {
+	bot := &serviceBot{}
+	service := NewService(&serviceStore{}, "", time.Now, bot)
+	if err := service.HandleMessage(context.Background(), 42, 42, "private", "alex", "/help"); err != nil || !strings.Contains(bot.text, "/jobs") {
+		t.Fatalf("help text=%q err=%v", bot.text, err)
+	}
+	if err := service.HandleMessage(context.Background(), 42, 42, "private", "alex", "/start"); err != nil || !strings.Contains(bot.text, "one-time link") {
+		t.Fatalf("start text=%q err=%v", bot.text, err)
 	}
 }

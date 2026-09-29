@@ -36,30 +36,29 @@ var requestMetrics = struct {
 }{values: make(map[string]requestMetric)}
 
 type AuthServices struct {
-	Registrar             Registrar
-	Sessions              Sessions
-	Email                 EmailActions
-	Limiter               AuthLimiter
-	Profile               ProfileService
-	Skills                SkillService
-	Positions             PositionService
-	Preferences           PreferencesService
-	Sources               SourcePreferenceService
-	Resumes               ResumeService
-	SourceCatalog         SourceCatalog
-	SourceOperations      SourceOperations
-	OperatorAPIToken      string
-	Services              ServiceController
-	Discovery             DiscoveryOperations
-	Jobs                  JobCatalog
-	Matches               MatchService
-	Telegram              TelegramService
-	ApplicationProfile    ApplicationProfileService
-	Applications          ApplicationService
-	AdminOutbox           AdminOutboxOperations
-	AdminApplications     AdminApplicationOperations
-	TelegramWebhookSecret string
-	Verifier              AccessVerifier
+	Registrar          Registrar
+	Sessions           Sessions
+	Email              EmailActions
+	Limiter            AuthLimiter
+	Profile            ProfileService
+	Skills             SkillService
+	Positions          PositionService
+	Preferences        PreferencesService
+	Sources            SourcePreferenceService
+	Resumes            ResumeService
+	SourceCatalog      SourceCatalog
+	SourceOperations   SourceOperations
+	OperatorAPIToken   string
+	Services           ServiceController
+	Discovery          DiscoveryOperations
+	Jobs               JobCatalog
+	Matches            MatchService
+	Telegram           TelegramService
+	ApplicationProfile ApplicationProfileService
+	Applications       ApplicationService
+	AdminOutbox        AdminOutboxOperations
+	AdminApplications  AdminApplicationOperations
+	Verifier           AccessVerifier
 }
 
 // New builds the Fiber server and registers the Huma HTTP adapter and API.
@@ -171,7 +170,6 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.Applications = auth[0].Applications
 		services.AdminOutbox = auth[0].AdminOutbox
 		services.AdminApplications = auth[0].AdminApplications
-		services.TelegramWebhookSecret = auth[0].TelegramWebhookSecret
 		services.Verifier = auth[0].Verifier
 	}
 	registerAuth(api, services.Registrar)
@@ -189,7 +187,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerDiscoveryOperations(api, services.Discovery, services.OperatorAPIToken)
 	registerJobs(api, services.Jobs)
 	registerMatches(api, services.Matches, services.Verifier)
-	registerTelegram(api, services.Telegram, services.Verifier, services.TelegramWebhookSecret)
+	registerTelegram(api, services.Telegram, services.Verifier)
 	registerApplicationProfile(api, services.ApplicationProfile, services.Verifier)
 	registerApplications(api, services.Applications, services.Verifier)
 	registerAdminOperations(api, services.AdminOutbox, services.AdminApplications, services.OperatorAPIToken)

@@ -22,6 +22,88 @@ type Store struct{ pool *pgxpool.Pool }
 
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 
+func (s *Store) AccountByTelegramID(ctx context.Context, telegramUserID int64) (user.UserID, domain.NotificationPreferences, bool, error) {
+	var userID string
+	var enabled bool
+	if err := s.pool.QueryRow(ctx, `UPDATE telegram_accounts SET last_interaction_at=now() WHERE telegram_user_id=$1 RETURNING user_id::text,enabled`, telegramUserID).Scan(&userID, &enabled); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", domain.DefaultPreferences(), false, nil
+		}
+		return "", domain.NotificationPreferences{}, false, fmt.Errorf("load Telegram command account: %w", err)
+	}
+	prefs, err := readPreferences(ctx, s.pool, userID)
+	if err != nil {
+		return "", domain.NotificationPreferences{}, false, fmt.Errorf("load Telegram command preferences: %w", err)
+	}
+	return user.UserID(userID), prefs, enabled, nil
+}
+
+func (s *Store) SetNotificationsEnabled(ctx context.Context, telegramUserID int64, enabled bool) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin Telegram notification setting update: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var userID string
+	if err := tx.QueryRow(ctx, `SELECT user_id::text FROM telegram_accounts WHERE telegram_user_id=$1 AND enabled=true FOR UPDATE`, telegramUserID).Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return application.ErrFeedbackNotOwned
+		}
+		return fmt.Errorf("verify Telegram account before updating settings: %w", err)
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO notification_preferences(user_id,enabled,minimum_score,immediate,digest_enabled,timezone)
+		VALUES($1,$2,70,true,false,'UTC') ON CONFLICT(user_id) DO UPDATE SET enabled=EXCLUDED.enabled,updated_at=now()`, userID, enabled)
+	if err != nil {
+		return fmt.Errorf("save Telegram notification setting: %w", err)
+	}
+	if !enabled {
+		_, err = tx.Exec(ctx, `UPDATE notifications SET status='cancelled',locked_by=NULL,locked_until=NULL WHERE user_id=$1 AND status IN ('pending','delivering')`, userID)
+	} else {
+		_, err = tx.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload)
+				SELECT gen_random_uuid(),'match.created','match',m.job_id::text,jsonb_build_object('user_id',m.user_id::text,'job_id',m.job_id::text,'score',m.score::int)
+				FROM user_job_matches m JOIN jobs j ON j.id=m.job_id WHERE m.user_id=$1 AND j.status='active'
+				AND m.score >= (SELECT minimum_score FROM notification_preferences WHERE user_id=$1)`, userID)
+	}
+	if err != nil {
+		return fmt.Errorf("reschedule Telegram notifications: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Telegram notification setting: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) RecentMatchesForTelegram(ctx context.Context, telegramUserID int64, limit int) ([]application.RecommendedJob, error) {
+	if limit < 1 || limit > 10 {
+		limit = 5
+	}
+	rows, err := s.pool.Query(ctx, `SELECT m.job_id::text,j.title,c.name,j.location,j.remote_policy,j.employment_types,j.apply_url,m.score,
+		COALESCE(array_agg(DISTINCT sk.name) FILTER (WHERE sk.name IS NOT NULL),'{}'::text[])
+		FROM telegram_accounts a JOIN user_job_matches m ON m.user_id=a.user_id JOIN jobs j ON j.id=m.job_id JOIN companies c ON c.id=j.company_id
+		LEFT JOIN user_profiles p ON p.user_id=m.user_id LEFT JOIN job_skills js ON js.job_id=j.id LEFT JOIN skills sk ON sk.id=js.skill_id
+		WHERE a.telegram_user_id=$1 AND a.enabled=true AND j.status='active'
+		AND m.candidate_version=COALESCE(p.match_version,0) AND m.job_version=j.match_version
+		AND NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=m.user_id AND f.job_id=m.job_id AND f.feedback_type IN ('hidden','not_interested','applied'))
+		GROUP BY m.job_id,j.title,c.name,j.location,j.remote_policy,j.employment_types,j.apply_url,m.score,m.computed_at
+		ORDER BY m.score DESC,m.computed_at DESC LIMIT $2`, telegramUserID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list Telegram recommended jobs: %w", err)
+	}
+	defer rows.Close()
+	items := make([]application.RecommendedJob, 0, limit)
+	for rows.Next() {
+		var item application.RecommendedJob
+		if err := rows.Scan(&item.JobID, &item.Title, &item.Company, &item.Location, &item.RemotePolicy, &item.Employment, &item.ApplyURL, &item.Score, &item.Skills); err != nil {
+			return nil, fmt.Errorf("read Telegram recommended job: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read Telegram recommended jobs: %w", err)
+	}
+	return items, nil
+}
+
 func (s *Store) CreateLink(ctx context.Context, userID user.UserID, id string, tokenHash []byte, expiresAt time.Time) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -42,7 +124,7 @@ func (s *Store) CreateLink(ctx context.Context, userID user.UserID, id string, t
 
 func (s *Store) Connection(ctx context.Context, userID user.UserID) (application.Account, error) {
 	var account application.Account
-	err := s.pool.QueryRow(ctx, `SELECT id::text,telegram_user_id,chat_id,username,connected_at FROM telegram_accounts WHERE user_id=$1`, string(userID)).Scan(&account.ID, &account.TelegramUserID, &account.ChatID, &account.Username, &account.ConnectedAt)
+	err := s.pool.QueryRow(ctx, `SELECT id::text,telegram_user_id,chat_id,username,connected_at,enabled,last_interaction_at FROM telegram_accounts WHERE user_id=$1`, string(userID)).Scan(&account.ID, &account.TelegramUserID, &account.ChatID, &account.Username, &account.ConnectedAt, &account.Enabled, &account.LastInteractionAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return application.Account{}, nil
 	}
@@ -66,8 +148,8 @@ func (s *Store) ConsumeLink(ctx context.Context, tokenHash []byte, account appli
 	if err != nil {
 		return fmt.Errorf("consume Telegram link token: %w", err)
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO telegram_accounts(id,user_id,telegram_user_id,chat_id,username) VALUES($1,$2,$3,$4,$5)
-		ON CONFLICT(user_id) DO UPDATE SET telegram_user_id=EXCLUDED.telegram_user_id,chat_id=EXCLUDED.chat_id,username=EXCLUDED.username,updated_at=now()`, account.ID, userID, account.TelegramUserID, account.ChatID, account.Username)
+	_, err = tx.Exec(ctx, `INSERT INTO telegram_accounts(id,user_id,telegram_user_id,chat_id,username,enabled,last_interaction_at) VALUES($1,$2,$3,$4,$5,true,now())
+		ON CONFLICT(user_id) DO UPDATE SET telegram_user_id=EXCLUDED.telegram_user_id,chat_id=EXCLUDED.chat_id,username=EXCLUDED.username,enabled=true,last_interaction_at=now(),updated_at=now()`, account.ID, userID, account.TelegramUserID, account.ChatID, account.Username)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "telegram_user_id") {
@@ -194,7 +276,7 @@ func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, ac
 	defer tx.Rollback(ctx)
 	var userID string
 	var chatID int64
-	err = tx.QueryRow(ctx, `SELECT user_id::text, chat_id FROM telegram_accounts WHERE telegram_user_id=$1 FOR UPDATE`, telegramUserID).Scan(&userID, &chatID)
+	err = tx.QueryRow(ctx, `SELECT user_id::text, chat_id FROM telegram_accounts WHERE telegram_user_id=$1 AND enabled=true FOR UPDATE`, telegramUserID).Scan(&userID, &chatID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, application.ErrFeedbackNotOwned
 	}
@@ -216,10 +298,14 @@ func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, ac
 	switch action {
 	case "save":
 		_, err = tx.Exec(ctx, `INSERT INTO saved_jobs(user_id,job_id) VALUES($1,$2) ON CONFLICT(user_id,job_id) DO NOTHING`, userID, jobID)
-	case "hide", "applied":
+	case "hide", "applied", "relevant", "not_relevant":
 		feedbackType := "hidden"
 		if action == "applied" {
 			feedbackType = "applied"
+		} else if action == "relevant" {
+			feedbackType = "relevant"
+		} else if action == "not_relevant" {
+			feedbackType = "not_interested"
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type) VALUES($1,$2,$3,$4)
 			ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET created_at=now()`, uuid.NewString(), userID, jobID, feedbackType)
@@ -229,7 +315,7 @@ func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, ac
 	if err != nil {
 		return 0, fmt.Errorf("save Telegram feedback: %w", err)
 	}
-	if action != "save" {
+	if action != "save" && action != "relevant" {
 		if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, userID, jobID); err != nil {
 			return 0, fmt.Errorf("cancel feedback notification: %w", err)
 		}
@@ -307,7 +393,7 @@ func recordFeedbackOutcome(action string, score, confidence int) {
 func (s *Store) SaveFeedbackReason(ctx context.Context, telegramUserID int64, jobID, reason string) error {
 	result, err := s.pool.Exec(ctx, `UPDATE user_job_feedback f SET reason=$3,created_at=now()
 		FROM telegram_accounts a
-		WHERE a.telegram_user_id=$1 AND f.user_id=a.user_id AND f.job_id=$2 AND f.feedback_type='hidden'`, telegramUserID, jobID, reason)
+		WHERE a.telegram_user_id=$1 AND a.enabled=true AND f.user_id=a.user_id AND f.job_id=$2 AND f.feedback_type='hidden'`, telegramUserID, jobID, reason)
 	if err != nil {
 		return fmt.Errorf("save Telegram feedback reason: %w", err)
 	}

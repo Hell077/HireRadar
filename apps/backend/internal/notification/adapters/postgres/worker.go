@@ -112,7 +112,7 @@ func (w *Worker) processApplicationEvent(ctx context.Context, onlyEvent string) 
 	var submittedAt sql.NullTime
 	err = w.pool.QueryRow(ctx, `SELECT ta.chat_id,j.title,c.name,j.apply_url,COALESCE(a.last_error_code,''),a.submitted_at
 		FROM job_applications a JOIN jobs j ON j.id=a.job_id JOIN companies c ON c.id=j.company_id
-		LEFT JOIN telegram_accounts ta ON ta.user_id=a.user_id WHERE a.id=$1`, payload.ApplicationID).
+		LEFT JOIN telegram_accounts ta ON ta.user_id=a.user_id AND ta.enabled=true WHERE a.id=$1`, payload.ApplicationID).
 		Scan(&chatID, &title, &company, &applyURL, &errorCode, &submittedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return true, w.outbox.Complete(ctx, claimed.ID, w.workerID)
@@ -178,6 +178,13 @@ func (w *Worker) ProcessEvent(ctx context.Context, eventID string) (bool, error)
 	return w.processMatchEvent(ctx, eventID)
 }
 
+// ProcessApplicationEvent processes one application status event. Exposing the
+// event-scoped operation keeps integration tests isolated from unrelated queue
+// traffic while exercising the same lease and delivery path as ProcessNext.
+func (w *Worker) ProcessApplicationEvent(ctx context.Context, eventID string) (bool, error) {
+	return w.processApplicationEvent(ctx, eventID)
+}
+
 func (w *Worker) processMatchEvent(ctx context.Context, onlyEvent string) (found bool, retErr error) {
 	started := time.Now()
 	defer func() {
@@ -226,7 +233,7 @@ func (w *Worker) processMatchEvent(ctx context.Context, onlyEvent string) (found
 		return w.retryEvent(ctx, tx, claimed.ID, err)
 	}
 	var connected bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM telegram_accounts WHERE user_id=$1)`, payload.UserID).Scan(&connected); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM telegram_accounts WHERE user_id=$1 AND enabled=true)`, payload.UserID).Scan(&connected); err != nil {
 		return w.retryEvent(ctx, tx, claimed.ID, err)
 	}
 	var dismissed bool
@@ -310,7 +317,7 @@ func (w *Worker) deliverNext(ctx context.Context) (found bool, retErr error) {
 		FROM notifications n JOIN telegram_accounts a ON a.user_id=n.user_id
 		JOIN user_job_matches m ON m.user_id=n.user_id AND m.job_id=n.job_id
 		JOIN jobs j ON j.id=n.job_id JOIN companies c ON c.id=j.company_id
-		WHERE ((n.status='pending' AND n.scheduled_at<=now()) OR (n.status='delivering' AND n.locked_until<=now())) AND j.status='active'
+		WHERE a.enabled=true AND ((n.status='pending' AND n.scheduled_at<=now()) OR (n.status='delivering' AND n.locked_until<=now())) AND j.status='active'
 		ORDER BY n.scheduled_at,n.id FOR UPDATE OF n SKIP LOCKED LIMIT 1`).Scan(&item.ID, &item.UserID, &item.JobID, &item.ChatID, &item.Score, &item.Title, &item.Company, &item.Location, &item.ApplyURL, &item.SalaryMinimum, &item.SalaryMaximum, &item.SalaryCurrency, &item.SalaryPeriod, &item.EmploymentTypes, &item.Skills)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -420,13 +427,38 @@ func (w *Worker) openNotificationURL(item dueNotification) string {
 
 func (w *Worker) retryDelivery(ctx context.Context, id string, cause error) (bool, error) {
 	const safeMessage = "Telegram delivery failed"
+	var telegramErr *application.TelegramAPIError
+	if errors.As(cause, &telegramErr) && telegramErr.Blocked {
+		var userID string
+		if err := w.pool.QueryRow(ctx, `UPDATE telegram_accounts a SET enabled=false,updated_at=now() FROM notifications n WHERE n.id=$1 AND a.user_id=n.user_id RETURNING a.user_id::text`, id).Scan(&userID); err != nil {
+			return true, fmt.Errorf("disable blocked Telegram account: %w", err)
+		}
+		if _, err := w.pool.Exec(ctx, `UPDATE notifications SET status='cancelled',last_error='Telegram chat unavailable',locked_by=NULL,locked_until=NULL WHERE user_id=$1 AND status IN ('pending','delivering')`, userID); err != nil {
+			return true, fmt.Errorf("cancel blocked Telegram deliveries: %w", err)
+		}
+		return true, nil
+	}
 	var status string
-	err := w.pool.QueryRow(ctx, `UPDATE notifications
+	var err error
+	if errors.As(cause, &telegramErr) && telegramErr.RetryAfter > 0 {
+		retryAfter := int(telegramErr.RetryAfter.Seconds())
+		if retryAfter < 1 {
+			retryAfter = 1
+		}
+		err = w.pool.QueryRow(ctx, `UPDATE notifications
+		SET status=CASE WHEN attempts >= $3 THEN 'failed' ELSE 'pending' END,
+		    last_error=$4,
+		    scheduled_at=CASE WHEN attempts >= $3 THEN scheduled_at ELSE now()+LEAST(3600,$5)*interval '1 second' END,
+		    locked_by=NULL,locked_until=NULL
+		WHERE id=$1 AND status='delivering' AND locked_by=$2 RETURNING status`, id, w.workerID, maxDeliveryAttempts, safeMessage, retryAfter).Scan(&status)
+	} else {
+		err = w.pool.QueryRow(ctx, `UPDATE notifications
 		SET status=CASE WHEN attempts >= $3 THEN 'failed' ELSE 'pending' END,
 		    last_error=$4,
 		    scheduled_at=CASE WHEN attempts >= $3 THEN scheduled_at ELSE now()+LEAST(3600,POWER(2,LEAST(attempts,12))::int)*interval '1 second' END,
 		    locked_by=NULL,locked_until=NULL
 		WHERE id=$1 AND status='delivering' AND locked_by=$2 RETURNING status`, id, w.workerID, maxDeliveryAttempts, safeMessage).Scan(&status)
+	}
 	if err != nil {
 		return true, fmt.Errorf("schedule Telegram retry: %w", err)
 	}

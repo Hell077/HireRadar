@@ -253,20 +253,24 @@ export default async function ProfilePage({
                 <div>
                   <h2 className="text-sm font-semibold">{t("telegram")}</h2>
                   <p className="text-muted-foreground text-[11px]">
-                    {telegram?.connected
+                    {telegram?.connected && telegram.enabled !== false
                       ? `@${telegram.username ?? "telegram"}`
-                      : t("notConnected")}
+                      : telegram?.connected
+                        ? t("telegramReconnectRequired")
+                        : t("notConnected")}
                   </p>
                 </div>
               </div>
               <p className="text-muted-foreground mt-4 text-xs leading-5">
                 {t("telegramHelp")}
               </p>
-              {!telegram?.connected ? (
+              {!telegram?.connected || telegram.enabled === false ? (
                 <form action={connectTelegram}>
                   <Button className="mt-4 w-full" size="lg" type="submit">
                     <LinkIcon aria-hidden="true" />
-                    {t("connectTelegram")}
+                    {telegram?.connected
+                      ? t("reconnectTelegram")
+                      : t("connectTelegram")}
                   </Button>
                 </form>
               ) : null}

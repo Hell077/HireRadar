@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -27,11 +28,13 @@ var (
 )
 
 type Account struct {
-	ID             string
-	TelegramUserID int64
-	ChatID         int64
-	Username       *string
-	ConnectedAt    time.Time
+	ID                string
+	TelegramUserID    int64
+	ChatID            int64
+	Username          *string
+	ConnectedAt       time.Time
+	Enabled           bool
+	LastInteractionAt *time.Time
 }
 
 type SavedJob struct {
@@ -42,6 +45,24 @@ type SavedJob struct {
 	ApplyURL string    `json:"apply_url"`
 	Status   string    `json:"status"`
 	SavedAt  time.Time `json:"saved_at"`
+}
+
+type RecommendedJob struct {
+	JobID        string
+	Title        string
+	Company      string
+	Location     string
+	RemotePolicy string
+	Employment   []string
+	Skills       []string
+	ApplyURL     string
+	Score        int
+}
+
+type CommandStore interface {
+	AccountByTelegramID(context.Context, int64) (user.UserID, domain.NotificationPreferences, bool, error)
+	RecentMatchesForTelegram(context.Context, int64, int) ([]RecommendedJob, error)
+	SetNotificationsEnabled(context.Context, int64, bool) error
 }
 
 type Link struct {
@@ -83,6 +104,16 @@ type Button struct {
 	Text         string `json:"text"`
 	URL          string `json:"url,omitempty"`
 	CallbackData string `json:"callback_data,omitempty"`
+}
+
+type TelegramAPIError struct {
+	StatusCode int
+	RetryAfter time.Duration
+	Blocked    bool
+}
+
+func (e *TelegramAPIError) Error() string {
+	return fmt.Sprintf("Telegram API returned HTTP %d", e.StatusCode)
 }
 
 type Service struct {
@@ -155,15 +186,121 @@ func (s *Service) HandleStart(ctx context.Context, telegramUserID, chatID int64,
 	return nil
 }
 
+// HandleMessage processes private Telegram commands while keeping account and
+// matching data access in the existing notification store.
+func (s *Service) HandleMessage(ctx context.Context, telegramUserID, chatID int64, chatType, username, text string) error {
+	if telegramUserID <= 0 || chatID <= 0 || chatType != "private" || telegramUserID != chatID || len(text) > 4096 {
+		return nil
+	}
+	parts := strings.Fields(text)
+	if len(parts) == 0 {
+		return nil
+	}
+	command := strings.SplitN(strings.TrimPrefix(parts[0], "/"), "@", 2)[0]
+	argument := ""
+	if len(parts) > 1 {
+		argument = parts[1]
+	}
+	if command == "start" && argument != "" {
+		if err := s.HandleStart(ctx, telegramUserID, chatID, username, argument); err != nil {
+			if errors.Is(err, ErrLinkExpired) || errors.Is(err, ErrTelegramInUse) {
+				return s.send(ctx, chatID, "That connection link is invalid or expired. Create a new link from HireRadar settings.", nil)
+			}
+			return err
+		}
+		return nil
+	}
+	if command == "help" {
+		return s.send(ctx, chatID, "HireRadar commands:\n/status — connection and notification status\n/jobs — recent recommended jobs\n/settings — notification settings\n/stop — pause notifications\n/resume — enable notifications", nil)
+	}
+	store, ok := s.store.(CommandStore)
+	if !ok {
+		return errors.New("Telegram command store is unavailable")
+	}
+	_, preferences, linked, err := store.AccountByTelegramID(ctx, telegramUserID)
+	if err != nil {
+		return err
+	}
+	if command == "start" {
+		if linked {
+			return s.send(ctx, chatID, "Your HireRadar account is already connected. Use /help to see available commands.", nil)
+		}
+		return s.send(ctx, chatID, "Connect Telegram from HireRadar Settings using the one-time link. Then use /help here.", nil)
+	}
+	if !linked {
+		return s.send(ctx, chatID, "Connect Telegram from HireRadar Settings first. The one-time link expires after 15 minutes.", nil)
+	}
+	switch command {
+	case "status":
+		state := "enabled"
+		if !preferences.Enabled {
+			state = "paused"
+		}
+		return s.send(ctx, chatID, fmt.Sprintf("HireRadar account: connected\nJob notifications: %s\nMinimum match score: %d%%", state, preferences.MinimumScore), nil)
+	case "settings":
+		return s.send(ctx, chatID, fmt.Sprintf("Notifications are %s. Minimum match score: %d%%. Use /stop to pause or /resume to enable.", map[bool]string{true: "enabled", false: "paused"}[preferences.Enabled], preferences.MinimumScore), nil)
+	case "stop", "resume":
+		enabled := command == "resume"
+		if err := store.SetNotificationsEnabled(ctx, telegramUserID, enabled); err != nil {
+			return err
+		}
+		message := "Notifications paused. Your HireRadar account remains connected. Use /resume to enable them again."
+		if enabled {
+			message = "Notifications enabled. New qualifying matches will be sent here."
+		}
+		return s.send(ctx, chatID, message, nil)
+	case "jobs":
+		jobs, err := store.RecentMatchesForTelegram(ctx, telegramUserID, 5)
+		if err != nil {
+			return err
+		}
+		if len(jobs) == 0 {
+			return s.send(ctx, chatID, "No recent matches yet. Check your HireRadar profile and preferences; new jobs are checked automatically.", nil)
+		}
+		for _, job := range jobs {
+			message := fmt.Sprintf("<b>%s</b>\n%s\nMatch: %d%%", html.EscapeString(job.Title), html.EscapeString(job.Company), job.Score)
+			if job.Location != "" {
+				message += "\n" + html.EscapeString(job.Location)
+			}
+			if len(job.Employment) > 0 {
+				message += "\n" + html.EscapeString(strings.Join(job.Employment, " · "))
+			}
+			if len(job.Skills) > 0 {
+				message += "\n" + html.EscapeString(strings.Join(job.Skills, " · "))
+			}
+			buttons := [][]Button{{{Text: "View job", URL: job.ApplyURL}, {Text: "Apply", CallbackData: "job:apply:" + job.JobID}}, {{Text: "Relevant", CallbackData: "job:relevant:" + job.JobID}, {Text: "Not relevant", CallbackData: "job:not_relevant:" + job.JobID}}}
+			if err := s.send(ctx, chatID, message, buttons); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return s.send(ctx, chatID, "Unknown command. Use /help for available commands.", nil)
+	}
+}
+
+func (s *Service) send(ctx context.Context, chatID int64, message string, buttons [][]Button) error {
+	if s.bot == nil {
+		return nil
+	}
+	return s.bot.SendMessage(ctx, chatID, message, buttons)
+}
+
 func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, callbackID, data string) error {
+	invalid := func() error {
+		if s.bot != nil && callbackID != "" {
+			_ = s.bot.AnswerCallback(ctx, callbackID, "This action is no longer available")
+		}
+		return ErrInvalidCallback
+	}
 	if strings.HasPrefix(data, "application_answer:") {
 		parts := strings.Split(data, ":")
 		if len(parts) != 3 || uuid.Validate(parts[1]) != nil || s.answerer == nil {
-			return ErrInvalidCallback
+			return invalid()
 		}
 		answer, err := base64.RawURLEncoding.DecodeString(parts[2])
 		if err != nil || len(answer) == 0 || len(answer) > 2000 {
-			return ErrInvalidCallback
+			return invalid()
 		}
 		if err := s.answerer.AnswerFromTelegram(ctx, telegramUserID, parts[1], string(answer)); err != nil {
 			if s.bot != nil && callbackID != "" {
@@ -179,6 +316,9 @@ func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, call
 	parts := strings.Split(data, ":")
 	if len(parts) == 3 && parts[0] == "fr" && uuid.Validate(parts[1]) == nil && validFeedbackReason(parts[2]) && parts[2] != "" {
 		if err := s.store.SaveFeedbackReason(ctx, telegramUserID, parts[1], parts[2]); err != nil {
+			if s.bot != nil && callbackID != "" {
+				_ = s.bot.AnswerCallback(ctx, callbackID, "This action is no longer available")
+			}
 			return err
 		}
 		if s.bot != nil && callbackID != "" {
@@ -187,12 +327,12 @@ func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, call
 		return nil
 	}
 	if len(parts) != 3 || parts[0] != "job" || uuid.Validate(parts[2]) != nil {
-		return ErrInvalidCallback
+		return invalid()
 	}
 	action := parts[1]
 	if action == "apply" {
 		if s.applications == nil {
-			return ErrInvalidCallback
+			return invalid()
 		}
 		if err := s.applications.RequestFromTelegram(ctx, telegramUserID, parts[2]); err != nil {
 			if errors.Is(err, ErrFeedbackNotOwned) && s.bot != nil && callbackID != "" {
@@ -207,12 +347,12 @@ func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, call
 		}
 		return nil
 	}
-	if action != "save" && action != "hide" && action != "applied" {
-		return ErrInvalidCallback
+	if action != "save" && action != "hide" && action != "applied" && action != "relevant" && action != "not_relevant" {
+		return invalid()
 	}
 	chatID, err := s.store.ApplyAction(ctx, telegramUserID, parts[2], action)
 	if err != nil {
-		if errors.Is(err, ErrFeedbackNotOwned) && s.bot != nil && callbackID != "" {
+		if s.bot != nil && callbackID != "" {
 			_ = s.bot.AnswerCallback(ctx, callbackID, "This match is no longer available")
 		}
 		return err
@@ -223,6 +363,10 @@ func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, call
 			response = "Hidden from your feed"
 		} else if action == "applied" {
 			response = "Marked as applied"
+		} else if action == "relevant" {
+			response = "Thanks — we’ll look for more like this"
+		} else if action == "not_relevant" {
+			response = "Hidden from your feed"
 		}
 		if err := s.bot.AnswerCallback(ctx, callbackID, response); err != nil {
 			return err

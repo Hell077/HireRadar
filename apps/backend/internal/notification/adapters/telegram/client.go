@@ -8,6 +8,7 @@ import (
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -63,18 +64,26 @@ func (c *Client) call(ctx context.Context, method string, payload any) error {
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("call Telegram %s: %w", method, err)
+		return fmt.Errorf("call Telegram %s: network request failed", method)
 	}
 	defer response.Body.Close()
 	var result struct {
 		OK          bool   `json:"ok"`
 		Description string `json:"description"`
+		Parameters  struct {
+			RetryAfter int `json:"retry_after"`
+		} `json:"parameters"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result); err != nil {
 		return fmt.Errorf("decode Telegram %s response: %w", method, err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 || !result.OK {
-		return fmt.Errorf("Telegram %s failed with status %d: %s", method, response.StatusCode, result.Description)
+		retryAfter := result.Parameters.RetryAfter
+		if retryAfter == 0 {
+			retryAfter, _ = strconv.Atoi(response.Header.Get("Retry-After"))
+		}
+		description := strings.ToLower(result.Description)
+		return &application.TelegramAPIError{StatusCode: response.StatusCode, RetryAfter: time.Duration(retryAfter) * time.Second, Blocked: response.StatusCode == http.StatusForbidden || strings.Contains(description, "bot was blocked") || strings.Contains(description, "chat not found")}
 	}
 	return nil
 }

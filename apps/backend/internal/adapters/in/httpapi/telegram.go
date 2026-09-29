@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"time"
 
@@ -22,8 +21,6 @@ type TelegramService interface {
 	RemoveSavedJob(context.Context, user.UserID, string) error
 	ApplyUserFeedback(context.Context, user.UserID, string, string, string) error
 	OpenNotification(context.Context, string) (string, error)
-	HandleStart(context.Context, int64, int64, string, string) error
-	HandleCallback(context.Context, int64, string, string) error
 }
 
 type telegramGetInput struct {
@@ -42,6 +39,7 @@ type telegramPreferencesInput struct {
 type telegramOutput struct {
 	Body struct {
 		Connected   bool       `json:"connected"`
+		Enabled     bool       `json:"enabled"`
 		Username    *string    `json:"username,omitempty"`
 		ConnectedAt *time.Time `json:"connected_at,omitempty"`
 	}
@@ -88,31 +86,7 @@ type savedJobsOutput struct {
 	}
 }
 
-type telegramWebhookInput struct {
-	Secret string `header:"X-Telegram-Bot-Api-Secret-Token" required:"true"`
-	Body   struct {
-		Message *struct {
-			Text string `json:"text"`
-			From struct {
-				ID       int64  `json:"id"`
-				Username string `json:"username"`
-			} `json:"from"`
-			Chat struct {
-				ID   int64  `json:"id"`
-				Type string `json:"type"`
-			} `json:"chat"`
-		} `json:"message,omitempty"`
-		CallbackQuery *struct {
-			ID   string `json:"id"`
-			Data string `json:"data"`
-			From struct {
-				ID int64 `json:"id"`
-			} `json:"from"`
-		} `json:"callback_query,omitempty"`
-	}
-}
-
-func registerTelegram(api huma.API, service TelegramService, verifier AccessVerifier, webhookSecret string) {
+func registerTelegram(api huma.API, service TelegramService, verifier AccessVerifier) {
 	huma.Register(api, huma.Operation{OperationID: "notification-open", Method: "GET", Path: "/api/v1/notifications/open/{id}", Summary: "Record a notification open and redirect to the application", DefaultStatus: 302}, func(ctx context.Context, input *notificationOpenInput) (*notificationOpenOutput, error) {
 		if service == nil {
 			return nil, huma.Error503ServiceUnavailable("notification open tracking unavailable")
@@ -192,6 +166,7 @@ func registerTelegram(api huma.API, service TelegramService, verifier AccessVeri
 		}
 		out := &telegramOutput{}
 		out.Body.Connected = account.ID != ""
+		out.Body.Enabled = account.Enabled
 		out.Body.Username, out.Body.ConnectedAt = account.Username, optionalTime(account.ConnectedAt, out.Body.Connected)
 		return out, nil
 	})
@@ -255,39 +230,6 @@ func registerTelegram(api huma.API, service TelegramService, verifier AccessVeri
 			return nil, huma.Error500InternalServerError("notification preferences update failed")
 		}
 		return &telegramPreferencesOutput{Body: input.Body}, nil
-	})
-	huma.Register(api, huma.Operation{OperationID: "telegram-webhook", Method: "POST", Path: "/webhooks/telegram", Summary: "Receive Telegram bot updates"}, func(ctx context.Context, input *telegramWebhookInput) (*telegramOKOutput, error) {
-		if service == nil || webhookSecret == "" {
-			return nil, huma.Error503ServiceUnavailable("Telegram webhook unavailable")
-		}
-		if len(input.Secret) != len(webhookSecret) || subtle.ConstantTimeCompare([]byte(input.Secret), []byte(webhookSecret)) != 1 {
-			return nil, huma.Error401Unauthorized("invalid webhook secret")
-		}
-		if input.Body.Message != nil {
-			message := input.Body.Message
-			if message.Chat.Type == "private" && message.From.ID == message.Chat.ID && len(message.Text) > 7 && message.Text[:7] == "/start " {
-				if err := service.HandleStart(ctx, message.From.ID, message.Chat.ID, message.From.Username, message.Text[7:]); err != nil {
-					if errors.Is(err, application.ErrLinkExpired) || errors.Is(err, application.ErrTelegramInUse) {
-						return nil, huma.Error400BadRequest("Telegram link is invalid, expired, or already connected")
-					}
-					return nil, huma.Error500InternalServerError("Telegram link could not be confirmed")
-				}
-			}
-		}
-		if input.Body.CallbackQuery != nil {
-			callback := input.Body.CallbackQuery
-			if err := service.HandleCallback(ctx, callback.From.ID, callback.ID, callback.Data); err != nil {
-				if errors.Is(err, application.ErrFeedbackNotOwned) || errors.Is(err, application.ErrInvalidCallback) {
-					out := &telegramOKOutput{}
-					out.Body.Status = "ignored"
-					return out, nil
-				}
-				return nil, huma.Error500InternalServerError("Telegram callback could not be processed")
-			}
-		}
-		out := &telegramOKOutput{}
-		out.Body.Status = "ok"
-		return out, nil
 	})
 }
 

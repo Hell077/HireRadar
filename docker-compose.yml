@@ -161,6 +161,32 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  telegram-bot:
+    profiles: ["telegram"]
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${HIRERADAR_VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: hireradar-backend:local
+    entrypoint: ["/app/telegram-bot"]
+    environment:
+      DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      PORT: ${TELEGRAM_PORT:-8090}
+    ports:
+      - "127.0.0.1:${TELEGRAM_PORT:-8090}:${TELEGRAM_PORT:-8090}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

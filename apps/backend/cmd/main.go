@@ -179,11 +179,6 @@ func run() error {
 		if cfg.TelegramBotToken != "" {
 			client := notificationtelegram.NewClient(cfg.TelegramBotToken)
 			telegramBot = client
-			if cfg.TelegramWebhookURL != "" {
-				if err := client.SetWebhook(ctx, cfg.TelegramWebhookURL, cfg.TelegramWebhookSecret); err != nil {
-					slog.Warn("configure Telegram webhook", "error", err)
-				}
-			}
 		}
 		telegramService := notificationapp.NewService(notificationpostgres.NewStore(client.Pool()), cfg.TelegramBotUsername, time.Now, telegramBot)
 		applicationStore := jobapplicationpostgres.NewStore(client.Pool())
@@ -194,7 +189,6 @@ func run() error {
 		services.Telegram = telegramService
 		services.ApplicationProfile = jobapplicationapp.NewProfileService(jobapplicationpostgres.NewProfileStore(client.Pool()))
 		services.Applications = applicationRequests
-		services.TelegramWebhookSecret = cfg.TelegramWebhookSecret
 		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
 			storage, err := s3storage.New(ctx, cfg)
 			if err != nil {

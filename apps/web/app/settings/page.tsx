@@ -257,9 +257,11 @@ export default async function SettingsPage({
                 </span>
                 <div>
                   <p className="text-sm font-semibold">
-                    {data.telegram?.connected
+                    {data.telegram?.connected && data.telegram.enabled !== false
                       ? t("telegramConnected")
-                      : t("telegramNotConnected")}
+                      : data.telegram?.connected
+                        ? t("telegramReconnectRequired")
+                        : t("telegramNotConnected")}
                   </p>
                   {data.telegram?.username ? (
                     <p className="text-xs text-muted-foreground">
@@ -270,13 +272,17 @@ export default async function SettingsPage({
               </div>
               <form
                 action={
-                  data.telegram?.connected
+                  data.telegram?.connected && data.telegram.enabled !== false
                     ? disconnectTelegram
                     : connectTelegram
                 }
               >
                 <Button type="submit" variant="outline">
-                  {data.telegram?.connected ? t("disconnect") : t("connect")}
+                  {data.telegram?.connected && data.telegram.enabled !== false
+                    ? t("disconnect")
+                    : data.telegram?.connected
+                      ? t("reconnect")
+                      : t("connect")}
                 </Button>
               </form>
             </CardContent>
