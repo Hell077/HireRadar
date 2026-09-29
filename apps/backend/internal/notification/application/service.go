@@ -8,19 +8,22 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/domain"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrLinkExpired      = errors.New("telegram link token is invalid or expired")
-	ErrTelegramInUse    = errors.New("telegram account is already linked")
-	ErrFeedbackNotOwned = errors.New("Telegram user does not own this match")
-	ErrInvalidCallback  = errors.New("invalid Telegram callback")
+	ErrLinkExpired          = errors.New("telegram link token is invalid or expired")
+	ErrTelegramInUse        = errors.New("telegram account is already linked")
+	ErrFeedbackNotOwned     = errors.New("Telegram user does not own this match")
+	ErrInvalidCallback      = errors.New("invalid Telegram callback")
+	ErrNotificationNotFound = errors.New("notification is not available")
 )
 
 type Account struct {
@@ -57,12 +60,23 @@ type Store interface {
 	ListSavedJobs(context.Context, user.UserID, int) ([]SavedJob, error)
 	RemoveSavedJob(context.Context, user.UserID, string) error
 	ApplyUserAction(context.Context, user.UserID, string, string) error
-	ApplyAction(context.Context, int64, string, string) error
+	ApplyUserFeedback(context.Context, user.UserID, string, string, string) error
+	ApplyAction(context.Context, int64, string, string) (int64, error)
+	SaveFeedbackReason(context.Context, int64, string, string) error
+	OpenNotification(context.Context, string) (string, int, int, bool, error)
 }
 
 type Bot interface {
 	SendMessage(context.Context, int64, string, [][]Button) error
 	AnswerCallback(context.Context, string, string) error
+}
+
+type ApplicationRequester interface {
+	RequestFromTelegram(context.Context, int64, string) error
+}
+
+type ApplicationAnswerer interface {
+	AnswerFromTelegram(context.Context, int64, string, string) error
 }
 
 type Button struct {
@@ -72,10 +86,12 @@ type Button struct {
 }
 
 type Service struct {
-	store       Store
-	botUsername string
-	now         func() time.Time
-	bot         Bot
+	store        Store
+	botUsername  string
+	now          func() time.Time
+	bot          Bot
+	applications ApplicationRequester
+	answerer     ApplicationAnswerer
 }
 
 func NewService(store Store, botUsername string, now func() time.Time, bot ...Bot) *Service {
@@ -84,6 +100,14 @@ func NewService(store Store, botUsername string, now func() time.Time, bot ...Bo
 		service.bot = bot[0]
 	}
 	return service
+}
+
+func (s *Service) SetApplicationRequester(requester ApplicationRequester) {
+	s.applications = requester
+}
+
+func (s *Service) SetApplicationAnswerer(answerer ApplicationAnswerer) {
+	s.answerer = answerer
 }
 
 func (s *Service) Connection(ctx context.Context, userID user.UserID) (Account, error) {
@@ -132,15 +156,62 @@ func (s *Service) HandleStart(ctx context.Context, telegramUserID, chatID int64,
 }
 
 func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, callbackID, data string) error {
+	if strings.HasPrefix(data, "application_answer:") {
+		parts := strings.Split(data, ":")
+		if len(parts) != 3 || uuid.Validate(parts[1]) != nil || s.answerer == nil {
+			return ErrInvalidCallback
+		}
+		answer, err := base64.RawURLEncoding.DecodeString(parts[2])
+		if err != nil || len(answer) == 0 || len(answer) > 2000 {
+			return ErrInvalidCallback
+		}
+		if err := s.answerer.AnswerFromTelegram(ctx, telegramUserID, parts[1], string(answer)); err != nil {
+			if s.bot != nil && callbackID != "" {
+				_ = s.bot.AnswerCallback(ctx, callbackID, "Answer could not be saved")
+			}
+			return err
+		}
+		if s.bot != nil && callbackID != "" {
+			return s.bot.AnswerCallback(ctx, callbackID, "Answer saved")
+		}
+		return nil
+	}
 	parts := strings.Split(data, ":")
+	if len(parts) == 3 && parts[0] == "fr" && uuid.Validate(parts[1]) == nil && validFeedbackReason(parts[2]) && parts[2] != "" {
+		if err := s.store.SaveFeedbackReason(ctx, telegramUserID, parts[1], parts[2]); err != nil {
+			return err
+		}
+		if s.bot != nil && callbackID != "" {
+			return s.bot.AnswerCallback(ctx, callbackID, "Thanks for the feedback")
+		}
+		return nil
+	}
 	if len(parts) != 3 || parts[0] != "job" || uuid.Validate(parts[2]) != nil {
 		return ErrInvalidCallback
 	}
 	action := parts[1]
+	if action == "apply" {
+		if s.applications == nil {
+			return ErrInvalidCallback
+		}
+		if err := s.applications.RequestFromTelegram(ctx, telegramUserID, parts[2]); err != nil {
+			if errors.Is(err, ErrFeedbackNotOwned) && s.bot != nil && callbackID != "" {
+				_ = s.bot.AnswerCallback(ctx, callbackID, "This match is no longer available")
+			} else if s.bot != nil && callbackID != "" {
+				_ = s.bot.AnswerCallback(ctx, callbackID, "Application could not be queued")
+			}
+			return err
+		}
+		if s.bot != nil && callbackID != "" {
+			return s.bot.AnswerCallback(ctx, callbackID, "Application queued")
+		}
+		return nil
+	}
 	if action != "save" && action != "hide" && action != "applied" {
 		return ErrInvalidCallback
 	}
-	if err := s.store.ApplyAction(ctx, telegramUserID, parts[2], action); err != nil {
+	chatID, err := s.store.ApplyAction(ctx, telegramUserID, parts[2], action)
+	if err != nil {
 		if errors.Is(err, ErrFeedbackNotOwned) && s.bot != nil && callbackID != "" {
 			_ = s.bot.AnswerCallback(ctx, callbackID, "This match is no longer available")
 		}
@@ -153,7 +224,12 @@ func (s *Service) HandleCallback(ctx context.Context, telegramUserID int64, call
 		} else if action == "applied" {
 			response = "Marked as applied"
 		}
-		return s.bot.AnswerCallback(ctx, callbackID, response)
+		if err := s.bot.AnswerCallback(ctx, callbackID, response); err != nil {
+			return err
+		}
+	}
+	if action == "hide" && s.bot != nil && chatID != 0 {
+		return s.bot.SendMessage(ctx, chatID, "Why was this job a mismatch? (optional)", feedbackReasonButtons(parts[2]))
 	}
 	return nil
 }
@@ -191,6 +267,57 @@ func (s *Service) ApplyUserAction(ctx context.Context, userID user.UserID, jobID
 		return ErrInvalidCallback
 	}
 	return s.store.ApplyUserAction(ctx, userID, jobID, action)
+}
+
+func feedbackReasonButtons(jobID string) [][]Button {
+	values := []struct{ label, value string }{
+		{"Wrong stack", "wrong_stack"}, {"Wrong role", "wrong_role"},
+		{"Seniority", "wrong_seniority"}, {"Location", "wrong_location"},
+		{"Salary", "wrong_salary"}, {"Company", "wrong_company"},
+		{"Duplicate", "duplicate"}, {"Already seen", "already_seen"},
+		{"Not interested", "not_interested"}, {"Other", "other"},
+	}
+	buttons := make([][]Button, 0, len(values))
+	for _, item := range values {
+		buttons = append(buttons, []Button{{Text: item.label, CallbackData: "fr:" + jobID + ":" + item.value}})
+	}
+	return buttons
+}
+
+func (s *Service) ApplyUserFeedback(ctx context.Context, userID user.UserID, jobID, action, reason string) error {
+	if uuid.Validate(jobID) != nil || (action != "hide" && action != "applied") || !validFeedbackReason(reason) || (reason != "" && action != "hide") {
+		return ErrInvalidCallback
+	}
+	return s.store.ApplyUserFeedback(ctx, userID, jobID, action, reason)
+}
+
+func (s *Service) OpenNotification(ctx context.Context, notificationID string) (string, error) {
+	if uuid.Validate(notificationID) != nil {
+		return "", ErrNotificationNotFound
+	}
+	applyURL, score, confidence, firstOpen, err := s.store.OpenNotification(ctx, notificationID)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.ParseRequestURI(applyURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil {
+		return "", ErrNotificationNotFound
+	}
+	if firstOpen {
+		observability.DefaultMetrics.Add("hireradar_product_notification_open_total", map[string]string{
+			"score_bucket": observability.Bucket100(score), "confidence_bucket": observability.Bucket100(confidence),
+		}, 1)
+	}
+	return parsed.String(), nil
+}
+
+func validFeedbackReason(reason string) bool {
+	switch reason {
+	case "", "wrong_stack", "wrong_role", "wrong_seniority", "wrong_location", "wrong_salary", "wrong_company", "duplicate", "already_seen", "not_interested", "other":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) Disconnect(ctx context.Context, userID user.UserID) error {

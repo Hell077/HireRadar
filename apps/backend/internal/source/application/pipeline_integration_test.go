@@ -83,7 +83,7 @@ func TestSeededSourcePipelineSurvivesWorkerRestartAndDeliversOnce(t *testing.T) 
 		t.Fatal(err)
 	}
 	matcher := matchingapp.NewService(matchingpostgres.NewStore(pool), time.Now)
-	matchingWorker := matchingpostgres.NewOutboxWorker(pool, func(ctx context.Context, id userdomain.UserID) error { _, err := matcher.Refresh(ctx, id); return err }, func(ctx context.Context, id string) error { return matcher.RefreshJob(ctx, id) })
+	matchingWorker := matchingpostgres.NewOutboxWorker(pool, func(ctx context.Context, id userdomain.UserID) error { return matcher.RefreshProfile(ctx, id) }, func(ctx context.Context, id string) error { return matcher.RefreshJob(ctx, id) })
 	if found, err := matchingWorker.ProcessEvent(ctx, eventID); err != nil || !found {
 		t.Fatalf("matching event found=%v err=%v", found, err)
 	}
@@ -94,7 +94,7 @@ func TestSeededSourcePipelineSurvivesWorkerRestartAndDeliversOnce(t *testing.T) 
 	if score < 70 {
 		t.Fatalf("match score %d is below notification threshold", score)
 	}
-	telegramID := int64(918273645001)
+	telegramID := time.Now().UnixNano()
 	if _, err := pool.Exec(ctx, `INSERT INTO telegram_accounts(id,user_id,telegram_user_id,chat_id) VALUES($1,$2,$3,$3)`, uuid.NewString(), userID, telegramID); err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +112,13 @@ func TestSeededSourcePipelineSurvivesWorkerRestartAndDeliversOnce(t *testing.T) 
 	}
 	// Reconstruct the worker after enqueue, as after a process restart.
 	restarted := notificationpostgres.NewWorker(pool, bot, time.Now)
-	if found, err := restarted.ProcessNext(ctx); err != nil || !found {
-		t.Fatalf("resumed notification found=%v err=%v", found, err)
+	for range 20 {
+		if bot.sends == 1 {
+			break
+		}
+		if found, err := restarted.ProcessNext(ctx); err != nil || !found {
+			t.Fatalf("resumed notification found=%v err=%v", found, err)
+		}
 	}
 	if found, err := restarted.ProcessEvent(ctx, eventID); err != nil || found {
 		t.Fatalf("duplicate outbox processing found=%v err=%v", found, err)

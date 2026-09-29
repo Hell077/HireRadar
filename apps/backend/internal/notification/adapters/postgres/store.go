@@ -10,6 +10,7 @@ import (
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/notification/domain"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -185,30 +186,33 @@ func (s *Store) RemoveSavedJob(ctx context.Context, userID user.UserID, jobID st
 	return nil
 }
 
-func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, action string) error {
+func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, action string) (int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin Telegram feedback: %w", err)
+		return 0, fmt.Errorf("begin Telegram feedback: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	var userID string
-	err = tx.QueryRow(ctx, `SELECT user_id::text FROM telegram_accounts WHERE telegram_user_id=$1 FOR UPDATE`, telegramUserID).Scan(&userID)
+	var chatID int64
+	err = tx.QueryRow(ctx, `SELECT user_id::text, chat_id FROM telegram_accounts WHERE telegram_user_id=$1 FOR UPDATE`, telegramUserID).Scan(&userID, &chatID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return application.ErrFeedbackNotOwned
+		return 0, application.ErrFeedbackNotOwned
 	}
 	if err != nil {
-		return fmt.Errorf("verify Telegram account ownership: %w", err)
+		return 0, fmt.Errorf("verify Telegram account ownership: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2,0))`, userID, jobID); err != nil {
-		return fmt.Errorf("lock Telegram match feedback: %w", err)
+		return 0, fmt.Errorf("lock Telegram match feedback: %w", err)
 	}
-	var ownsMatch bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_matches WHERE user_id=$1 AND job_id=$2)`, userID, jobID).Scan(&ownsMatch); err != nil {
-		return fmt.Errorf("verify Telegram match ownership: %w", err)
+	var score, confidence int
+	err = tx.QueryRow(ctx, `SELECT score,confidence FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, jobID).Scan(&score, &confidence)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, application.ErrFeedbackNotOwned
 	}
-	if !ownsMatch {
-		return application.ErrFeedbackNotOwned
+	if err != nil {
+		return 0, fmt.Errorf("verify Telegram match ownership: %w", err)
 	}
+	var removed int64
 	switch action {
 	case "save":
 		_, err = tx.Exec(ctx, `INSERT INTO saved_jobs(user_id,job_id) VALUES($1,$2) ON CONFLICT(user_id,job_id) DO NOTHING`, userID, jobID)
@@ -220,26 +224,36 @@ func (s *Store) ApplyAction(ctx context.Context, telegramUserID int64, jobID, ac
 		_, err = tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type) VALUES($1,$2,$3,$4)
 			ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET created_at=now()`, uuid.NewString(), userID, jobID, feedbackType)
 	default:
-		return application.ErrInvalidCallback
+		return 0, application.ErrInvalidCallback
 	}
 	if err != nil {
-		return fmt.Errorf("save Telegram feedback: %w", err)
+		return 0, fmt.Errorf("save Telegram feedback: %w", err)
 	}
 	if action != "save" {
 		if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, userID, jobID); err != nil {
-			return fmt.Errorf("cancel feedback notification: %w", err)
+			return 0, fmt.Errorf("cancel feedback notification: %w", err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, jobID); err != nil {
-			return fmt.Errorf("remove dismissed match: %w", err)
+		tag, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, jobID)
+		if err != nil {
+			return 0, fmt.Errorf("remove dismissed match: %w", err)
 		}
+		removed = tag.RowsAffected()
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit Telegram feedback: %w", err)
+		return 0, fmt.Errorf("commit Telegram feedback: %w", err)
 	}
-	return nil
+	if removed > 0 {
+		observability.DefaultMetrics.Add("hireradar_matches_removed_total", nil, float64(removed))
+	}
+	recordFeedbackOutcome(action, score, confidence)
+	return chatID, nil
 }
 
 func (s *Store) ApplyUserAction(ctx context.Context, userID user.UserID, jobID, action string) error {
+	return s.ApplyUserFeedback(ctx, userID, jobID, action, "")
+}
+
+func (s *Store) ApplyUserFeedback(ctx context.Context, userID user.UserID, jobID, action, reason string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin user job feedback: %w", err)
@@ -249,12 +263,13 @@ func (s *Store) ApplyUserAction(ctx context.Context, userID user.UserID, jobID, 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2,0))`, userIDString, jobID); err != nil {
 		return fmt.Errorf("lock user job feedback: %w", err)
 	}
-	var ownsMatch bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_job_matches WHERE user_id=$1 AND job_id=$2)`, userIDString, jobID).Scan(&ownsMatch); err != nil {
-		return fmt.Errorf("verify user match ownership: %w", err)
-	}
-	if !ownsMatch {
+	var score, confidence int
+	err = tx.QueryRow(ctx, `SELECT score,confidence FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userIDString, jobID).Scan(&score, &confidence)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return application.ErrFeedbackNotOwned
+	}
+	if err != nil {
+		return fmt.Errorf("verify user match ownership: %w", err)
 	}
 	feedbackType := "hidden"
 	if action == "applied" {
@@ -262,18 +277,73 @@ func (s *Store) ApplyUserAction(ctx context.Context, userID user.UserID, jobID, 
 	} else if action != "hide" {
 		return application.ErrInvalidCallback
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type) VALUES($1,$2,$3,$4)
-		ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET created_at=now()`, uuid.NewString(), userIDString, jobID, feedbackType); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO user_job_feedback(id,user_id,job_id,feedback_type,reason) VALUES($1,$2,$3,$4,NULLIF($5,''))
+		ON CONFLICT(user_id,job_id,feedback_type) DO UPDATE SET reason=COALESCE(EXCLUDED.reason,user_job_feedback.reason),created_at=now()`, uuid.NewString(), userIDString, jobID, feedbackType, reason); err != nil {
 		return fmt.Errorf("save user job feedback: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `UPDATE notifications SET status='cancelled' WHERE user_id=$1 AND job_id=$2 AND status='pending'`, userIDString, jobID); err != nil {
 		return fmt.Errorf("cancel feedback notification: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userIDString, jobID); err != nil {
+	tag, err := tx.Exec(ctx, `DELETE FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userIDString, jobID)
+	if err != nil {
 		return fmt.Errorf("remove dismissed match: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit user job feedback: %w", err)
 	}
+	if tag.RowsAffected() > 0 {
+		observability.DefaultMetrics.Add("hireradar_matches_removed_total", nil, float64(tag.RowsAffected()))
+	}
+	recordFeedbackOutcome(action, score, confidence)
 	return nil
+}
+
+func recordFeedbackOutcome(action string, score, confidence int) {
+	observability.DefaultMetrics.Add("hireradar_product_feedback_total", map[string]string{
+		"action": action, "score_bucket": observability.Bucket100(score), "confidence_bucket": observability.Bucket100(confidence),
+	}, 1)
+}
+
+func (s *Store) SaveFeedbackReason(ctx context.Context, telegramUserID int64, jobID, reason string) error {
+	result, err := s.pool.Exec(ctx, `UPDATE user_job_feedback f SET reason=$3,created_at=now()
+		FROM telegram_accounts a
+		WHERE a.telegram_user_id=$1 AND f.user_id=a.user_id AND f.job_id=$2 AND f.feedback_type='hidden'`, telegramUserID, jobID, reason)
+	if err != nil {
+		return fmt.Errorf("save Telegram feedback reason: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return application.ErrFeedbackNotOwned
+	}
+	return nil
+}
+
+func (s *Store) OpenNotification(ctx context.Context, notificationID string) (string, int, int, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", 0, 0, false, fmt.Errorf("begin notification open tracking: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var applyURL string
+	var score, confidence int
+	var openedAt sql.NullTime
+	err = tx.QueryRow(ctx, `SELECT j.apply_url,n.match_score,n.match_confidence,n.opened_at
+		FROM notifications n JOIN jobs j ON j.id=n.job_id
+		WHERE n.id=$1 AND n.status='sent' FOR UPDATE OF n`, notificationID).
+		Scan(&applyURL, &score, &confidence, &openedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, 0, false, application.ErrNotificationNotFound
+	}
+	if err != nil {
+		return "", 0, 0, false, fmt.Errorf("load notification open target: %w", err)
+	}
+	firstOpen := !openedAt.Valid
+	if firstOpen {
+		if _, err := tx.Exec(ctx, `UPDATE notifications SET opened_at=now() WHERE id=$1`, notificationID); err != nil {
+			return "", 0, 0, false, fmt.Errorf("record notification open: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", 0, 0, false, fmt.Errorf("commit notification open tracking: %w", err)
+	}
+	return applyURL, score, confidence, firstOpen, nil
 }

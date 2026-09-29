@@ -6,6 +6,7 @@ import (
 )
 
 func TestLoadDevelopmentDefaults(t *testing.T) {
+	t.Setenv("HIRERADAR_MODE", "")
 	t.Setenv("APP_ENV", "")
 	t.Setenv("PORT", "")
 	t.Setenv("DATABASE_URL", "")
@@ -21,12 +22,44 @@ func TestLoadDevelopmentDefaults(t *testing.T) {
 	t.Setenv("TELEGRAM_WEBHOOK_SECRET", "")
 	t.Setenv("TELEGRAM_WEBHOOK_URL", "")
 	t.Setenv("OPERATOR_API_TOKEN", "")
+	t.Setenv("GREENHOUSE_API_KEYS_JSON", "")
+	t.Setenv("LEVER_API_KEYS_JSON", "")
+	t.Setenv("ASHBY_API_KEYS_JSON", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Environment != "development" || cfg.Port != "8080" {
+	if cfg.Environment != "development" || cfg.Port != "8080" || cfg.RuntimeMode != "all" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
+	}
+}
+
+func TestLoadRuntimeMode(t *testing.T) {
+	for _, mode := range []string{"api", "worker", "all"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("HIRERADAR_MODE", mode)
+			cfg, err := Load()
+			if err != nil || cfg.RuntimeMode != mode {
+				t.Fatalf("mode=%q config=%+v err=%v", mode, cfg, err)
+			}
+		})
+	}
+	t.Setenv("HIRERADAR_MODE", "invalid")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "HIRERADAR_MODE") {
+		t.Fatalf("invalid mode error=%v", err)
+	}
+}
+
+func TestLoadValidatesLeverAPIKeysWithoutReturningSecrets(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("LEVER_API_KEYS_JSON", `{"acme":"employer-secret"}`)
+	cfg, err := Load()
+	if err != nil || cfg.LeverAPIKeys["acme"] != "employer-secret" {
+		t.Fatalf("Lever credentials were not loaded: %+v, %v", cfg.LeverAPIKeys, err)
+	}
+	t.Setenv("LEVER_API_KEYS_JSON", `{"../acme":"employer-secret"}`)
+	if _, err := Load(); err == nil || strings.Contains(err.Error(), "employer-secret") {
+		t.Fatalf("invalid Lever credentials leaked or were accepted: %v", err)
 	}
 }
 

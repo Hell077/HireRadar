@@ -14,7 +14,10 @@ import (
 	user "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
 
-type fakeTelegramService struct{ started, callbacks int }
+type fakeTelegramService struct {
+	started, callbacks             int
+	feedbackAction, feedbackReason string
+}
 
 func (f *fakeTelegramService) Connection(context.Context, user.UserID) (application.Account, error) {
 	return application.Account{}, nil
@@ -33,8 +36,12 @@ func (f *fakeTelegramService) SavedJobs(context.Context, user.UserID, int) ([]ap
 	return nil, nil
 }
 func (f *fakeTelegramService) RemoveSavedJob(context.Context, user.UserID, string) error { return nil }
-func (f *fakeTelegramService) ApplyUserAction(context.Context, user.UserID, string, string) error {
+func (f *fakeTelegramService) ApplyUserFeedback(_ context.Context, _ user.UserID, _ string, action, reason string) error {
+	f.feedbackAction, f.feedbackReason = action, reason
 	return nil
+}
+func (*fakeTelegramService) OpenNotification(context.Context, string) (string, error) {
+	return "https://jobs.example/apply", nil
 }
 func (f *fakeTelegramService) HandleStart(context.Context, int64, int64, string, string) error {
 	f.started++
@@ -80,6 +87,36 @@ func TestJobFeedbackRequiresAuthentication(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", response.StatusCode)
+	}
+}
+
+func TestJobFeedbackAcceptsControlledReason(t *testing.T) {
+	service := &fakeTelegramService{}
+	app := New(health.NewService(), AuthServices{Telegram: service, Verifier: fakeVerifier{}})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/b2d45992-9a64-42f3-92a8-b511562184d2/feedback", strings.NewReader(`{"action":"hide","reason":"wrong_stack"}`))
+	request.Header.Set("Authorization", "Bearer valid")
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK || service.feedbackAction != "hide" || service.feedbackReason != "wrong_stack" {
+		t.Fatalf("status=%d action=%q reason=%q", response.StatusCode, service.feedbackAction, service.feedbackReason)
+	}
+}
+
+func TestNotificationOpenRedirectsToStoredApplicationURL(t *testing.T) {
+	service := &fakeTelegramService{}
+	app := New(health.NewService(), AuthServices{Telegram: service})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/notifications/open/b2d45992-9a64-42f3-92a8-b511562184d2", nil)
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusFound || response.Header.Get("Location") != "https://jobs.example/apply" {
+		t.Fatalf("status=%d location=%q", response.StatusCode, response.Header.Get("Location"))
 	}
 }
 

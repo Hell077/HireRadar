@@ -20,7 +20,8 @@ type TelegramService interface {
 	SavePreferences(context.Context, user.UserID, domain.NotificationPreferences) error
 	SavedJobs(context.Context, user.UserID, int) ([]application.SavedJob, error)
 	RemoveSavedJob(context.Context, user.UserID, string) error
-	ApplyUserAction(context.Context, user.UserID, string, string) error
+	ApplyUserFeedback(context.Context, user.UserID, string, string, string) error
+	OpenNotification(context.Context, string) (string, error)
 	HandleStart(context.Context, int64, int64, string, string) error
 	HandleCallback(context.Context, int64, string, string) error
 }
@@ -59,6 +60,12 @@ type telegramOKOutput struct {
 		Status string `json:"status"`
 	}
 }
+type notificationOpenInput struct {
+	ID string `path:"id"`
+}
+type notificationOpenOutput struct {
+	Location string `header:"Location"`
+}
 type savedJobsInput struct {
 	Authorization string `header:"Authorization" required:"false"`
 	Limit         int    `query:"limit" default:"50" minimum:"1" maximum:"100"`
@@ -72,6 +79,7 @@ type jobFeedbackInput struct {
 	ID            string `path:"id"`
 	Body          struct {
 		Action string `json:"action" enum:"hide,applied"`
+		Reason string `json:"reason,omitempty" enum:"wrong_stack,wrong_role,wrong_seniority,wrong_location,wrong_salary,wrong_company,duplicate,already_seen,not_interested,other"`
 	}
 }
 type savedJobsOutput struct {
@@ -105,6 +113,19 @@ type telegramWebhookInput struct {
 }
 
 func registerTelegram(api huma.API, service TelegramService, verifier AccessVerifier, webhookSecret string) {
+	huma.Register(api, huma.Operation{OperationID: "notification-open", Method: "GET", Path: "/api/v1/notifications/open/{id}", Summary: "Record a notification open and redirect to the application", DefaultStatus: 302}, func(ctx context.Context, input *notificationOpenInput) (*notificationOpenOutput, error) {
+		if service == nil {
+			return nil, huma.Error503ServiceUnavailable("notification open tracking unavailable")
+		}
+		applyURL, err := service.OpenNotification(ctx, input.ID)
+		if errors.Is(err, application.ErrNotificationNotFound) {
+			return nil, huma.Error404NotFound("notification not found")
+		}
+		if err != nil {
+			return nil, huma.Error500InternalServerError("notification could not be opened")
+		}
+		return &notificationOpenOutput{Location: applyURL}, nil
+	})
 	huma.Register(api, huma.Operation{OperationID: "job-feedback", Method: "POST", Path: "/api/v1/jobs/{id}/feedback", Summary: "Hide a job or mark it as applied"}, func(ctx context.Context, input *jobFeedbackInput) (*telegramOKOutput, error) {
 		if service == nil {
 			return nil, huma.Error503ServiceUnavailable("job feedback unavailable")
@@ -113,7 +134,7 @@ func registerTelegram(api huma.API, service TelegramService, verifier AccessVeri
 		if err != nil {
 			return nil, err
 		}
-		if err := service.ApplyUserAction(ctx, id, input.ID, input.Body.Action); err != nil {
+		if err := service.ApplyUserFeedback(ctx, id, input.ID, input.Body.Action, input.Body.Reason); err != nil {
 			if errors.Is(err, application.ErrFeedbackNotOwned) {
 				return nil, huma.Error404NotFound("job match not found")
 			}

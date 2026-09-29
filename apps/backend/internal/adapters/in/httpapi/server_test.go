@@ -13,10 +13,12 @@ import (
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	"github.com/Hell077/HireRadar/apps/backend/internal/auth/application"
+	jobapplication "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/domain"
 	"github.com/Hell077/HireRadar/apps/backend/internal/lifecycle"
 	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/matching/engine"
 	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
+	"github.com/Hell077/HireRadar/apps/backend/internal/outbox"
 	sourcedomain "github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 )
@@ -34,6 +36,73 @@ func (f fakeRegistrar) Register(context.Context, string, string) (userdomain.Use
 type fakeSourceCatalog struct {
 	sources []sourcedomain.Source
 	err     error
+}
+
+type fakeAdminOutbox struct{ retried string }
+
+func (f *fakeAdminOutbox) ListFailed(context.Context, int) ([]outbox.FailedEvent, error) {
+	return []outbox.FailedEvent{{ID: "5db228eb-0fa0-4e31-a9a8-64e488a9846f", EventType: "fixture"}}, nil
+}
+func (f *fakeAdminOutbox) RetryFailed(_ context.Context, id string) error { f.retried = id; return nil }
+
+type fakeAdminApplications struct{ retried jobapplication.ID }
+
+func (f *fakeAdminApplications) ListFailed(context.Context, int) ([]jobapplication.FailedApplication, error) {
+	return []jobapplication.FailedApplication{{ID: "5db228eb-0fa0-4e31-a9a8-64e488a9846f", Status: jobapplication.StatusFailed}}, nil
+}
+func (f *fakeAdminApplications) RetryFailed(_ context.Context, id jobapplication.ID) error {
+	f.retried = id
+	return nil
+}
+
+func TestAdminRecoveryOperationsRequireOperatorToken(t *testing.T) {
+	secret := "01234567890123456789012345678901"
+	outboxOps := &fakeAdminOutbox{}
+	applicationOps := &fakeAdminApplications{}
+	app := New(health.NewService(), AuthServices{OperatorAPIToken: secret, AdminOutbox: outboxOps, AdminApplications: applicationOps})
+	for _, test := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/admin/outbox/failed"},
+		{http.MethodPost, "/api/v1/admin/outbox/5db228eb-0fa0-4e31-a9a8-64e488a9846f/retry"},
+		{http.MethodGet, "/api/v1/admin/applications/failed"},
+		{http.MethodPost, "/api/v1/admin/applications/5db228eb-0fa0-4e31-a9a8-64e488a9846f/retry"},
+	} {
+		response, err := app.Test(httptest.NewRequest(test.method, test.path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%s %s status=%d want 401", test.method, test.path, response.StatusCode)
+		}
+	}
+	for _, test := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/admin/outbox/failed"},
+		{http.MethodPost, "/api/v1/admin/outbox/5db228eb-0fa0-4e31-a9a8-64e488a9846f/retry"},
+		{http.MethodGet, "/api/v1/admin/applications/failed"},
+		{http.MethodPost, "/api/v1/admin/applications/5db228eb-0fa0-4e31-a9a8-64e488a9846f/retry"},
+	} {
+		request := httptest.NewRequest(test.method, test.path, nil)
+		request.Header.Set("X-Operator-Token", secret)
+		response, err := app.Test(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			ID string `json:"id"`
+		}
+		if test.method == http.MethodPost {
+			_ = json.NewDecoder(response.Body).Decode(&body)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s status=%d want 200", test.method, test.path, response.StatusCode)
+		}
+		if test.method == http.MethodPost && body.ID != "5db228eb-0fa0-4e31-a9a8-64e488a9846f" {
+			t.Fatalf("%s %s returned id %q", test.method, test.path, body.ID)
+		}
+	}
+	const id = "5db228eb-0fa0-4e31-a9a8-64e488a9846f"
+	_ = id
 }
 
 func (f fakeSourceCatalog) ListEnabled(context.Context) ([]sourcedomain.Source, error) {
@@ -161,6 +230,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestMetricsExposeRequestCounters(t *testing.T) {
+	observability.DefaultMetrics.Add("hireradar_jobs_fetched_total", nil, 3)
 	requestMetrics.Lock()
 	requestMetrics.values = make(map[string]requestMetric)
 	requestMetrics.Unlock()
@@ -179,7 +249,7 @@ func TestMetricsExposeRequestCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `hireradar_http_requests_total{method="GET",status="200"} 1`) {
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), `hireradar_http_requests_total{method="GET",status="200"} 1`) || !strings.Contains(string(body), "hireradar_jobs_fetched_total 3") {
 		t.Fatalf("status=%d metrics=%s", response.StatusCode, body)
 	}
 }

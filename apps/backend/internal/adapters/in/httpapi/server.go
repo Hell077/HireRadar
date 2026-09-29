@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/requestid"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
+	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
 	fiberotel "github.com/gofiber/contrib/v3/otel"
 )
 
@@ -53,6 +54,10 @@ type AuthServices struct {
 	Jobs                  JobCatalog
 	Matches               MatchService
 	Telegram              TelegramService
+	ApplicationProfile    ApplicationProfileService
+	Applications          ApplicationService
+	AdminOutbox           AdminOutboxOperations
+	AdminApplications     AdminApplicationOperations
 	TelegramWebhookSecret string
 	Verifier              AccessVerifier
 }
@@ -97,6 +102,7 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 			fmt.Fprintf(&output, "hireradar_http_request_duration_seconds_sum{method=%q,status=%q} %g\n", parts[0], parts[1], metric.duration)
 		}
 		requestMetrics.Unlock()
+		output.WriteString(observability.DefaultMetrics.PrometheusText())
 		c.Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		return c.SendString(output.String())
 	})
@@ -161,6 +167,10 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 		services.Jobs = auth[0].Jobs
 		services.Matches = auth[0].Matches
 		services.Telegram = auth[0].Telegram
+		services.ApplicationProfile = auth[0].ApplicationProfile
+		services.Applications = auth[0].Applications
+		services.AdminOutbox = auth[0].AdminOutbox
+		services.AdminApplications = auth[0].AdminApplications
 		services.TelegramWebhookSecret = auth[0].TelegramWebhookSecret
 		services.Verifier = auth[0].Verifier
 	}
@@ -180,6 +190,9 @@ func New(checker health.Checker, auth ...AuthServices) *fiber.App {
 	registerJobs(api, services.Jobs)
 	registerMatches(api, services.Matches, services.Verifier)
 	registerTelegram(api, services.Telegram, services.Verifier, services.TelegramWebhookSecret)
+	registerApplicationProfile(api, services.ApplicationProfile, services.Verifier)
+	registerApplications(api, services.Applications, services.Verifier)
+	registerAdminOperations(api, services.AdminOutbox, services.AdminApplications, services.OperatorAPIToken)
 
 	return app
 }

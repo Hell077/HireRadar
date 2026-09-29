@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,6 +10,7 @@ import (
 )
 
 type Config struct {
+	RuntimeMode           string
 	Environment           string
 	Port                  string
 	DatabaseURL           string
@@ -24,6 +26,9 @@ type Config struct {
 	TelegramWebhookSecret string
 	TelegramWebhookURL    string
 	OperatorAPIToken      string
+	GreenhouseAPIKeys     map[string]string
+	LeverAPIKeys          map[string]string
+	AshbyAPIKeys          map[string]string
 }
 
 // Load validates process configuration before opening external connections.
@@ -31,6 +36,7 @@ type Config struct {
 // readiness remains unavailable until both dependencies are configured.
 func Load() (Config, error) {
 	cfg := Config{
+		RuntimeMode:           os.Getenv("HIRERADAR_MODE"),
 		Environment:           os.Getenv("APP_ENV"),
 		Port:                  os.Getenv("PORT"),
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
@@ -46,6 +52,50 @@ func Load() (Config, error) {
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
 		TelegramWebhookURL:    os.Getenv("TELEGRAM_WEBHOOK_URL"),
 		OperatorAPIToken:      os.Getenv("OPERATOR_API_TOKEN"),
+	}
+	if cfg.RuntimeMode == "" {
+		cfg.RuntimeMode = "all"
+	}
+	switch cfg.RuntimeMode {
+	case "api", "worker", "all":
+	default:
+		return Config{}, fmt.Errorf("HIRERADAR_MODE must be api, worker, or all")
+	}
+	if raw := os.Getenv("GREENHOUSE_API_KEYS_JSON"); raw != "" {
+		var keys map[string]string
+		if err := json.Unmarshal([]byte(raw), &keys); err != nil || keys == nil {
+			return Config{}, fmt.Errorf("GREENHOUSE_API_KEYS_JSON must be a JSON object of board tokens to authorized API keys")
+		}
+		for board, key := range keys {
+			if !validGreenhouseBoard(board) || strings.TrimSpace(key) == "" || len(key) > 4096 {
+				return Config{}, fmt.Errorf("GREENHOUSE_API_KEYS_JSON contains an invalid board credential")
+			}
+		}
+		cfg.GreenhouseAPIKeys = keys
+	}
+	if raw := os.Getenv("LEVER_API_KEYS_JSON"); raw != "" {
+		var keys map[string]string
+		if err := json.Unmarshal([]byte(raw), &keys); err != nil || keys == nil {
+			return Config{}, fmt.Errorf("LEVER_API_KEYS_JSON must be a JSON object of site names to authorized API keys")
+		}
+		for site, key := range keys {
+			if !validGreenhouseBoard(site) || strings.TrimSpace(key) == "" || len(key) > 4096 {
+				return Config{}, fmt.Errorf("LEVER_API_KEYS_JSON contains an invalid site credential")
+			}
+		}
+		cfg.LeverAPIKeys = keys
+	}
+	if raw := os.Getenv("ASHBY_API_KEYS_JSON"); raw != "" {
+		var keys map[string]string
+		if err := json.Unmarshal([]byte(raw), &keys); err != nil || keys == nil {
+			return Config{}, fmt.Errorf("ASHBY_API_KEYS_JSON must be a JSON object of organization names to authorized API keys")
+		}
+		for org, key := range keys {
+			if !validGreenhouseBoard(org) || strings.TrimSpace(key) == "" || len(key) > 4096 {
+				return Config{}, fmt.Errorf("ASHBY_API_KEYS_JSON contains an invalid organization credential")
+			}
+		}
+		cfg.AshbyAPIKeys = keys
 	}
 	cfg.TelegramBotUsername = strings.TrimPrefix(cfg.TelegramBotUsername, "@")
 	telegramValues := []string{cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret}
@@ -116,4 +166,16 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("OPERATOR_API_TOKEN must contain at least 32 characters when configured")
 	}
 	return cfg, nil
+}
+
+func validGreenhouseBoard(value string) bool {
+	if value == "" || len(value) > 120 {
+		return false
+	}
+	for _, char := range value {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' || char == '-') {
+			return false
+		}
+	}
+	return true
 }

@@ -30,6 +30,11 @@ import (
 	discoveryweb "github.com/Hell077/HireRadar/apps/backend/internal/discovery/adapters/web"
 	discoveryapp "github.com/Hell077/HireRadar/apps/backend/internal/discovery/application"
 	jobpostgres "github.com/Hell077/HireRadar/apps/backend/internal/job/adapters/postgres"
+	ashby "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/ashby"
+	greenhouse "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/greenhouse"
+	lever "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/lever"
+	jobapplicationpostgres "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/postgres"
+	jobapplicationapp "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/lifecycle"
 	matchpostgres "github.com/Hell077/HireRadar/apps/backend/internal/matching/adapters/postgres"
 	matchapp "github.com/Hell077/HireRadar/apps/backend/internal/matching/application"
@@ -37,6 +42,7 @@ import (
 	notificationtelegram "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/telegram"
 	notificationapp "github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
 	"github.com/Hell077/HireRadar/apps/backend/internal/observability"
+	outboxpostgres "github.com/Hell077/HireRadar/apps/backend/internal/outbox/adapters/postgres"
 	profilepostgres "github.com/Hell077/HireRadar/apps/backend/internal/profile/adapters/postgres"
 	profileapp "github.com/Hell077/HireRadar/apps/backend/internal/profile/application"
 	resumepostgres "github.com/Hell077/HireRadar/apps/backend/internal/resume/adapters/postgres"
@@ -47,6 +53,7 @@ import (
 	sourcebootstrap "github.com/Hell077/HireRadar/apps/backend/internal/source/bootstrap"
 	userdomain "github.com/Hell077/HireRadar/apps/backend/internal/user/domain"
 	"github.com/Hell077/HireRadar/apps/backend/migrations"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -87,6 +94,7 @@ func run() error {
 	database := health.Pinger(unavailable{})
 	services := httpapi.AuthServices{}
 	if cfg.DatabaseURL != "" {
+		var resumeObjectStorage resumeapp.ObjectStorage
 		client, err := postgres.New(ctx, cfg.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("configure PostgreSQL: %w", err)
@@ -121,6 +129,7 @@ func run() error {
 		services.SourceCatalog = sourceCatalog
 		services.SourceOperations = sourceCatalog
 		services.OperatorAPIToken = cfg.OperatorAPIToken
+		services.AdminOutbox = outboxpostgres.NewStore(client.Pool())
 		services.Jobs = jobpostgres.NewCatalog(client.Pool())
 		services.Matches = matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
 		if value := os.Getenv("SOURCE_WORKER_PARALLELISM"); value != "" {
@@ -150,8 +159,7 @@ func run() error {
 		services.Discovery = discoveryWorker
 		matcher := matchapp.NewService(matchpostgres.NewStore(client.Pool()), time.Now)
 		matchWorker := matchpostgres.NewOutboxWorker(client.Pool(), func(ctx context.Context, id userdomain.UserID) error {
-			_, err := matcher.Refresh(ctx, id)
-			return err
+			return matcher.RefreshProfile(ctx, id)
 		}, func(ctx context.Context, jobID string) error { return matcher.RefreshJob(ctx, jobID) })
 		runners["matching"] = func(ctx context.Context) error {
 			return runProcessor(ctx, "matching", manager, matchWorker.ProcessNext)
@@ -177,13 +185,22 @@ func run() error {
 				}
 			}
 		}
-		services.Telegram = notificationapp.NewService(notificationpostgres.NewStore(client.Pool()), cfg.TelegramBotUsername, time.Now, telegramBot)
+		telegramService := notificationapp.NewService(notificationpostgres.NewStore(client.Pool()), cfg.TelegramBotUsername, time.Now, telegramBot)
+		applicationStore := jobapplicationpostgres.NewStore(client.Pool())
+		services.AdminApplications = applicationStore
+		applicationRequests := jobapplicationapp.NewRequestService(applicationStore, uuid.NewString, time.Now)
+		telegramService.SetApplicationRequester(applicationRequests)
+		telegramService.SetApplicationAnswerer(applicationRequests)
+		services.Telegram = telegramService
+		services.ApplicationProfile = jobapplicationapp.NewProfileService(jobapplicationpostgres.NewProfileStore(client.Pool()))
+		services.Applications = applicationRequests
 		services.TelegramWebhookSecret = cfg.TelegramWebhookSecret
 		if cfg.S3Endpoint != "" && cfg.S3PublicEndpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
 			storage, err := s3storage.New(ctx, cfg)
 			if err != nil {
 				return fmt.Errorf("configure resume storage: %w", err)
 			}
+			resumeObjectStorage = storage
 			services.Resumes = resumeapp.NewService(resumepostgres.NewStore(client.Pool()), storage, time.Now)
 			resumeWorker := resumeapp.NewWorker(resumepostgres.NewStore(client.Pool()), storage)
 			resumeWorker.SetErrorReporter(serviceReporter(manager, "resume"))
@@ -195,8 +212,25 @@ func run() error {
 			if cfg.TelegramBotToken == "" {
 				return errors.New("TELEGRAM_BOT_TOKEN is not configured")
 			}
-			worker := notificationpostgres.NewWorker(client.Pool(), notificationtelegram.NewClient(cfg.TelegramBotToken), time.Now)
+			worker := notificationpostgres.NewWorker(client.Pool(), notificationtelegram.NewClient(cfg.TelegramBotToken), time.Now, os.Getenv("HIRERADAR_API_PUBLIC_URL"))
 			return runProcessor(ctx, "notification", manager, worker.ProcessNext)
+		}
+		providers := []jobapplicationapp.Provider{}
+		if resumeObjectStorage != nil && len(cfg.GreenhouseAPIKeys) > 0 {
+			greenhouseProvider := greenhouse.New(greenhouse.CredentialMap(cfg.GreenhouseAPIKeys), jobapplicationpostgres.NewResumeReader(client.Pool(), resumeObjectStorage))
+			providers = append(providers, greenhouseProvider)
+		}
+		if resumeObjectStorage != nil && len(cfg.LeverAPIKeys) > 0 {
+			leverProvider := lever.New(lever.CredentialMap(cfg.LeverAPIKeys), jobapplicationpostgres.NewResumeReader(client.Pool(), resumeObjectStorage))
+			providers = append(providers, leverProvider)
+		}
+		if resumeObjectStorage != nil && len(cfg.AshbyAPIKeys) > 0 {
+			ashbyProvider := ashby.New(ashby.CredentialMap(cfg.AshbyAPIKeys), jobapplicationpostgres.NewResumeReader(client.Pool(), resumeObjectStorage))
+			providers = append(providers, ashbyProvider)
+		}
+		applicationWorker := jobapplicationapp.NewWorker(outboxpostgres.NewStore(client.Pool()), applicationStore, jobapplicationapp.NewProviderRegistry(providers...), uuid.NewString(), time.Now)
+		runners["application"] = func(ctx context.Context) error {
+			return runProcessor(ctx, "application", manager, applicationWorker.ProcessNext)
 		}
 		if cfg.JWTPrivateKey != "" {
 			signer, err := token.NewSigner(cfg.JWTPrivateKey)
@@ -211,13 +245,17 @@ func run() error {
 			services.Verifier = signer
 		}
 	} else {
-		for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume"} {
+		for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume", "application"} {
 			disabledReasons[name] = "DATABASE_URL is not configured"
 		}
 	}
-	for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume"} {
+	for _, name := range []string{"source", "discovery", "matching", "notification", "email", "resume", "application"} {
 		runner, enabled := runners[name]
 		reason := disabledReasons[name]
+		if cfg.RuntimeMode == "api" {
+			enabled = false
+			reason = "background workers are disabled in api runtime mode"
+		}
 		if name == "notification" && cfg.TelegramBotToken == "" {
 			enabled = false
 			reason = "TELEGRAM_BOT_TOKEN is not configured"
@@ -245,11 +283,18 @@ func run() error {
 	app := httpapi.New(checker, services)
 	manager.StartAll(ctx)
 	listenErr := make(chan error, 1)
-	go func() { listenErr <- app.Listen(":" + cfg.Port) }()
-	slog.Info("backend listening", "port", cfg.Port, "environment", cfg.Environment)
+	if cfg.RuntimeMode != "worker" {
+		go func() { listenErr <- app.Listen(":" + cfg.Port) }()
+		slog.Info("backend listening", "port", cfg.Port, "environment", cfg.Environment, "mode", cfg.RuntimeMode)
+	} else {
+		slog.Info("backend workers running", "environment", cfg.Environment, "mode", cfg.RuntimeMode)
+	}
 
 	select {
 	case err := <-listenErr:
+		if cfg.RuntimeMode == "worker" {
+			return err
+		}
 		stop()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -261,11 +306,15 @@ func run() error {
 		if err := manager.StopAll(shutdownCtx); err != nil {
 			slog.Error("background service shutdown incomplete", "error", err)
 		}
-		if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-			return fmt.Errorf("shutdown HTTP server: %w", err)
+		if cfg.RuntimeMode != "worker" {
+			if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+				return fmt.Errorf("shutdown HTTP server: %w", err)
+			}
 		}
-		if err := <-listenErr; err != nil {
-			return err
+		if cfg.RuntimeMode != "worker" {
+			if err := <-listenErr; err != nil {
+				return err
+			}
 		}
 		slog.Info("backend stopped cleanly")
 		return nil

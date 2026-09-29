@@ -1,6 +1,7 @@
 name: hireradar
 
 x-backend-env: &backend-env
+  HIRERADAR_MODE: all
   APP_ENV: production
   PORT: "8080"
   DATABASE_URL: postgres://hireradar@postgres:5432/hireradar?sslmode=disable
@@ -24,6 +25,7 @@ x-backend-env: &backend-env
   SMTP_USERNAME: ${SMTP_USERNAME:-}
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+  HIRERADAR_API_PUBLIC_URL: ${HIRERADAR_API_PUBLIC_URL:-}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 services:
@@ -114,7 +116,9 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
         BUILD_TIME: ${BUILD_TIME:-unknown}
     image: hireradar-backend:local
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      HIRERADAR_MODE: api
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -132,6 +136,29 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${HIRERADAR_VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: hireradar-backend:local
+    environment:
+      <<: *backend-env
+      HIRERADAR_MODE: worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

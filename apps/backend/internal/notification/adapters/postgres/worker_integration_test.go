@@ -19,14 +19,71 @@ import (
 
 type fakeBot struct {
 	messages int
+	text     string
 	buttons  [][]application.Button
 	err      error
+	onSend   func() error
 }
 
-func (f *fakeBot) SendMessage(_ context.Context, _ int64, _ string, buttons [][]application.Button) error {
+func (f *fakeBot) SendMessage(_ context.Context, _ int64, text string, buttons [][]application.Button) error {
 	f.messages++
+	f.text = text
 	f.buttons = buttons
+	if f.onSend != nil {
+		if err := f.onSend(); err != nil {
+			return err
+		}
+	}
 	return f.err
+}
+
+func TestApplicationNeedsInputNotificationOffersExplicitOptions(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL to a migrated PostgreSQL test database")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	userID, companyID, jobID, appID, questionID, eventID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,password_hash) VALUES($1,$2,'test')`, userID, userID+"@status.example"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM outbox_events WHERE aggregate_id=$1`, appID)
+		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, userID)
+		_, _ = pool.Exec(ctx, `DELETE FROM companies WHERE id=$1`, companyID)
+	}()
+	if _, err := pool.Exec(ctx, `INSERT INTO companies(id,name,normalized_name) VALUES($1,'Status Test',$2)`, companyID, companyID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,remote_policy,eligibility,apply_url,fingerprint,status) VALUES($1,$2,'Engineer','engineer','unknown','unknown','https://example.test/apply',$3,'active')`, jobID, companyID, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO job_applications(id,user_id,job_id,provider,status) VALUES($1,$2,$3,'greenhouse','needs_input')`, appID, userID, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO job_application_questions(id,application_id,external_key,question,question_type,required,options,status) VALUES($1,$2,'work_authorization','Are you authorized to work?','select',true,'[{"value":1,"label":"Yes"},{"value":0,"label":"No"}]','unanswered')`, questionID, appID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO telegram_accounts(id,user_id,telegram_user_id,chat_id) VALUES($1,$2,502,7002)`, uuid.NewString(), userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'application.status.needs_input','job_application',$2,jsonb_build_object('application_id',$2::text))`, eventID, appID); err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Exec(ctx, `DELETE FROM outbox_events WHERE id=$1`, eventID)
+	bot := &fakeBot{}
+	worker := NewWorker(pool, bot, time.Now)
+	if found, err := worker.processApplicationEvent(ctx, eventID); err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if bot.messages != 1 || !strings.Contains(bot.text, "Are you authorized to work?") || len(bot.buttons) != 3 || bot.buttons[0][0].CallbackData == "" || bot.buttons[2][0].URL != "https://example.test/apply" {
+		t.Fatalf("unexpected missing input notification: %+v", bot)
+	}
 }
 func (f *fakeBot) AnswerCallback(context.Context, string, string) error { return f.err }
 
@@ -75,7 +132,16 @@ func TestNotificationOutboxDeliveryFeedbackAndDeadLetter(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'match.created','match',$2,jsonb_build_object('user_id',$3::text,'job_id',$2::text,'score',92))`, eventID, firstJobID, userID); err != nil {
 		t.Fatal(err)
 	}
-	bot := &fakeBot{}
+	bot := &fakeBot{onSend: func() error {
+		var status string
+		if err := pool.QueryRow(ctx, `SELECT status FROM notifications WHERE user_id=$1 AND job_id=$2`, userID, firstJobID).Scan(&status); err != nil {
+			return err
+		}
+		if status != "delivering" {
+			return errors.New("notification claim was not committed before Telegram call")
+		}
+		return nil
+	}}
 	worker := NewWorker(pool, bot, time.Now)
 	found, err := worker.ProcessEvent(ctx, eventID)
 	if err != nil || !found {
@@ -89,6 +155,18 @@ func TestNotificationOutboxDeliveryFeedbackAndDeadLetter(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE user_id=$1 AND job_id=$2`, userID, firstJobID).Scan(&notificationCount); err != nil || notificationCount != 1 {
 		t.Fatalf("notification count=%d err=%v", notificationCount, err)
 	}
+	var notificationID string
+	if err := pool.QueryRow(ctx, `SELECT id::text FROM notifications WHERE user_id=$1 AND job_id=$2`, userID, firstJobID).Scan(&notificationID); err != nil {
+		t.Fatal(err)
+	}
+	openURL, score, confidence, firstOpen, err := store.OpenNotification(ctx, notificationID)
+	if err != nil || openURL != "https://example.test/"+firstJobID || score != 92 || confidence != 0 || !firstOpen {
+		t.Fatalf("open target=%q score=%d confidence=%d first=%v err=%v", openURL, score, confidence, firstOpen, err)
+	}
+	_, _, _, firstOpen, err = store.OpenNotification(ctx, notificationID)
+	if err != nil || firstOpen {
+		t.Fatalf("repeated open first=%v err=%v", firstOpen, err)
+	}
 	duplicateEvent := uuid.NewString()
 	if _, err := pool.Exec(ctx, `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,payload) VALUES($1,'match.created','match',$2,jsonb_build_object('user_id',$3::text,'job_id',$2::text,'score',92))`, duplicateEvent, firstJobID, userID); err != nil {
 		t.Fatal(err)
@@ -99,14 +177,21 @@ func TestNotificationOutboxDeliveryFeedbackAndDeadLetter(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE user_id=$1 AND job_id=$2`, userID, firstJobID).Scan(&notificationCount); err != nil || notificationCount != 1 {
 		t.Fatalf("duplicate notification count=%d err=%v", notificationCount, err)
 	}
-	if err := store.ApplyAction(ctx, 501, firstJobID, "save"); err != nil {
+	if _, err := store.ApplyAction(ctx, 501, firstJobID, "save"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ApplyAction(ctx, 999, firstJobID, "hide"); !errors.Is(err, application.ErrFeedbackNotOwned) {
+	if _, err := store.ApplyAction(ctx, 999, firstJobID, "hide"); !errors.Is(err, application.ErrFeedbackNotOwned) {
 		t.Fatalf("non-owner feedback error = %v", err)
 	}
-	if err := store.ApplyAction(ctx, 501, firstJobID, "hide"); err != nil {
+	if _, err := store.ApplyAction(ctx, 501, firstJobID, "hide"); err != nil {
 		t.Fatal(err)
+	}
+	if err := store.SaveFeedbackReason(ctx, 501, firstJobID, "wrong_stack"); err != nil {
+		t.Fatal(err)
+	}
+	var reason string
+	if err := pool.QueryRow(ctx, `SELECT reason FROM user_job_feedback WHERE user_id=$1 AND job_id=$2 AND feedback_type='hidden'`, userID, firstJobID).Scan(&reason); err != nil || reason != "wrong_stack" {
+		t.Fatalf("hidden feedback reason=%q err=%v", reason, err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_job_matches WHERE user_id=$1 AND job_id=$2`, userID, firstJobID).Scan(&notificationCount); err != nil || notificationCount != 0 {
 		t.Fatalf("hidden match count=%d err=%v", notificationCount, err)
