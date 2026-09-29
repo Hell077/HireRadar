@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { normalizePositions } from "@/lib/profile/positions";
+
 import {
   apiRequest,
   authenticatedRequest,
@@ -122,12 +124,35 @@ export async function saveOnboardingProfessional(formData: FormData) {
   redirect("/onboarding/preferences");
 }
 
+const skillAliases: Record<string, string> = {
+  go: "Go",
+  golang: "Go",
+  js: "JavaScript",
+  javascript: "JavaScript",
+  ts: "TypeScript",
+  typescript: "TypeScript",
+  reactjs: "React",
+  "react.js": "React",
+  nextjs: "Next.js",
+  "next.js": "Next.js",
+  postgres: "PostgreSQL",
+  postgresql: "PostgreSQL",
+};
+
 export async function updateSkills(formData: FormData) {
   const skills = formData
     .getAll("skills")
     .map(String)
-    .map((name) => ({ name: name.trim() }))
-    .filter(({ name }) => name);
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => skillAliases[name.toLocaleLowerCase()] ?? name)
+    .filter(
+      (name, index, values) =>
+        values.findIndex(
+          (value) => value.toLocaleLowerCase() === name.toLocaleLowerCase(),
+        ) === index,
+    )
+    .map((name) => ({ name }));
   const response = await authenticatedRequest(
     "/api/v1/profile/skills",
     {
@@ -143,9 +168,14 @@ export async function updateSkills(formData: FormData) {
 }
 
 export async function saveOnboardingPreferences(formData: FormData) {
-  const roles = formData.getAll("roles").map(String);
+  const roles = normalizePositions(formData.getAll("positions").map(String));
   const remotePolicies = formData.getAll("remotePolicy").map(String);
-  const employmentTypes = formData.getAll("employmentType").map(String);
+  const employmentTypes = formData
+    .getAll("employmentType")
+    .map(String)
+    .flatMap((value) =>
+      value === "project" ? ["contract", "freelance", "b2b"] : [value],
+    );
   const regions = formData.getAll("region").map(String);
   const put = (path: string, body: unknown) =>
     authenticatedRequest(

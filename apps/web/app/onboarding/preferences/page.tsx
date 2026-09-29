@@ -1,5 +1,5 @@
 import { BriefcaseBusiness, Clock3, Globe2, Send } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import {
   Card,
   CardContent,
@@ -8,9 +8,11 @@ import {
 } from "@repo/ui/components/card";
 
 import { ChoiceCard } from "@/components/onboarding/choice-card";
+import { PositionSelector } from "@/components/preferences/position-selector";
 import { OnboardingActions } from "@/components/onboarding/onboarding-actions";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { saveOnboardingPreferences } from "@/app/profile-actions";
+import { getCandidateData } from "@/lib/api/server";
 
 export default async function OnboardingPreferencesPage({
   searchParams,
@@ -18,7 +20,13 @@ export default async function OnboardingPreferencesPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const t = await getTranslations("onboarding");
+  const locale = await getLocale();
   const { error } = await searchParams;
+  const candidate = await getCandidateData();
+  const countryCode = candidate?.profile.country || "KZ";
+  const countryName =
+    new Intl.DisplayNames([locale], { type: "region" }).of(countryCode) ||
+    countryCode;
   return (
     <OnboardingShell
       step={4}
@@ -36,72 +44,67 @@ export default async function OnboardingPreferencesPage({
             <CardHeader>
               <CardTitle>{t("targetRoles")}</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <ChoiceCard
-                name="roles"
-                value="Backend Engineer"
-                label={t("backend")}
-                checked
-              />
-              <ChoiceCard
-                name="roles"
-                value="Frontend Engineer"
-                label={t("frontend")}
-                checked
-              />
-              <ChoiceCard
-                name="roles"
-                value="Full Stack Engineer"
-                label={t("fullstack")}
-                checked
-              />
-              <ChoiceCard
-                name="roles"
-                value="Engineering Lead"
-                label={t("lead")}
-              />
+            <CardContent>
+              <PositionSelector initialPositions={candidate?.positions ?? []} />
             </CardContent>
           </Card>
 
+          {["worldwide", "remote", "remote_region", "remote_country"].map(
+            (policy) => (
+              <input
+                key={policy}
+                type="hidden"
+                name="remotePolicy"
+                value={policy}
+              />
+            ),
+          )}
+          <div className="flex items-start gap-3 rounded-xl bg-secondary/50 p-4">
+            <Globe2
+              className="mt-0.5 size-5 shrink-0 text-primary"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="text-sm font-semibold">{t("eligibilityTitle")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("eligibilityHelp", {
+                  country: countryName,
+                })}
+              </p>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>{t("workPreferences")}</CardTitle>
+              <CardTitle>{t("employmentTypes")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <ChoiceCard
-                name="remotePolicy"
-                value="worldwide"
-                label={t("worldwide")}
-                description={t("worldwideHelp")}
-                icon={<Globe2 className="size-4" aria-hidden="true" />}
-                checked
+                name="employmentType"
+                value="full_time"
+                label={t("workFullTime")}
+                description={t("fulltimeHelp")}
+                icon={
+                  <BriefcaseBusiness className="size-4" aria-hidden="true" />
+                }
               />
               <ChoiceCard
-                name="region"
-                value="emea"
-                label={t("emea")}
-                description={t("emeaHelp")}
+                name="employmentType"
+                value="part_time"
+                label={t("workPartTime")}
+                description={t("parttimeHelp")}
                 icon={<Clock3 className="size-4" aria-hidden="true" />}
                 checked
               />
               <ChoiceCard
                 name="employmentType"
-                value="contract"
-                label={t("contract")}
-                description={t("contractHelp")}
+                value="project"
+                label={t("workProject")}
+                description={t("workProjectHelp")}
                 icon={
                   <BriefcaseBusiness className="size-4" aria-hidden="true" />
                 }
                 checked
-              />
-              <ChoiceCard
-                name="employmentType"
-                value="full_time"
-                label={t("fulltime")}
-                description={t("fulltimeHelp")}
-                icon={
-                  <BriefcaseBusiness className="size-4" aria-hidden="true" />
-                }
               />
             </CardContent>
           </Card>

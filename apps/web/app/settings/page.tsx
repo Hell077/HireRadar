@@ -11,6 +11,7 @@ import {
 import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
+import { PositionSelector } from "@/components/preferences/position-selector";
 import {
   connectTelegram,
   disconnectTelegram,
@@ -23,14 +24,16 @@ function Check({
   value,
   label,
   checked,
+  description,
 }: {
   name: string;
   value?: string;
   label: string;
   checked: boolean;
+  description?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-medium">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm">
       <input
         className="size-4 accent-primary"
         type="checkbox"
@@ -38,7 +41,14 @@ function Check({
         value={value}
         defaultChecked={checked}
       />
-      {label}
+      <span className="min-w-0">
+        <span className="block font-medium">{label}</span>
+        {description ? (
+          <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+            {description}
+          </span>
+        ) : null}
+      </span>
     </label>
   );
 }
@@ -101,23 +111,29 @@ export default async function SettingsPage({
                 </p>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                {data.sources.map((source) => (
-                  <div key={source.id}>
-                    <input type="hidden" name="allSource" value={source.id} />
-                    <Check
-                      name="source"
-                      value={source.id}
-                      label={`${source.name} · ${source.type}`}
-                      checked={enabledSources.has(source.id)}
-                    />
-                  </div>
-                ))}
+                {data.sources.length === 0 ? (
+                  <p className="text-sm text-muted-foreground sm:col-span-2">
+                    {t("sourcesEmpty")}
+                  </p>
+                ) : (
+                  data.sources.map((source) => (
+                    <div key={source.id}>
+                      <input type="hidden" name="allSource" value={source.id} />
+                      <Check
+                        name="source"
+                        value={source.id}
+                        label={`${source.name} · ${source.type}`}
+                        checked={enabledSources.has(source.id)}
+                      />
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
           </Reveal>
 
           <Reveal delay={0.1}>
-            <Card>
+            <Card id="job-preferences" className="scroll-mt-24">
               <CardHeader className="border-b">
                 <CardTitle className="flex items-center gap-2">
                   <SlidersHorizontal className="size-5 text-primary" />
@@ -125,36 +141,47 @@ export default async function SettingsPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <label className="block text-sm font-medium">
-                  {t("positions")}
-                  <input
-                    className="mt-2 h-11 w-full rounded-md border bg-background px-3"
-                    name="positions"
-                    defaultValue={data.positions.join(", ")}
-                    placeholder="Backend Engineer, Frontend Engineer"
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {["worldwide", "remote", "remote_region"].map((value) => (
-                    <Check
+                <PositionSelector initialPositions={data.positions} />
+                {["worldwide", "remote", "remote_region", "remote_country"].map(
+                  (value) => (
+                    <input
                       key={value}
+                      type="hidden"
                       name="remotePolicy"
                       value={value}
-                      label={value}
-                      checked={
-                        preferences?.remote_policies?.includes(value) ??
-                        value === "worldwide"
-                      }
                     />
-                  ))}
-                  {["full_time", "contract", "b2b"].map((value) => (
+                  ),
+                )}
+                <p className="rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground">
+                  {t("eligibilityAutomatic")}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {(
+                    [
+                      ["full_time", t("workFullTime")],
+                      ["part_time", t("workPartTime")],
+                      ["project", t("workProject")],
+                    ] as const
+                  ).map(([value, label]) => (
                     <Check
                       key={value}
                       name="employmentType"
                       value={value}
-                      label={value}
+                      label={label}
+                      description={
+                        value === "full_time"
+                          ? t("workFullTimeHelp")
+                          : value === "part_time"
+                            ? t("workPartTimeHelp")
+                            : t("workProjectHelp")
+                      }
                       checked={
-                        preferences?.employment_types?.includes(value) ?? true
+                        value === "project"
+                          ? (preferences?.employment_types?.some((type) =>
+                              ["contract", "b2b", "freelance"].includes(type),
+                            ) ?? true)
+                          : (preferences?.employment_types?.includes(value) ??
+                            value === "part_time")
                       }
                     />
                   ))}
