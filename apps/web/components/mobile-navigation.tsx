@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { BriefcaseBusiness, Bookmark, Settings, UserRound } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  Bookmark,
+  Settings,
+  UserRound,
+  ClipboardList,
+} from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 
-type NavigationItem = "profile" | "jobs" | "saved" | "settings";
+type NavigationItem =
+  "profile" | "jobs" | "saved" | "applications" | "settings";
 
 export function MobileNavigation({
   active = "profile",
@@ -17,6 +24,12 @@ export function MobileNavigation({
   const items = [
     { key: "jobs", label: t("jobs"), href: "/jobs", icon: BriefcaseBusiness },
     { key: "saved", label: t("saved"), href: "/saved", icon: Bookmark },
+    {
+      key: "applications",
+      label: t("applications"),
+      href: "/applications",
+      icon: ClipboardList,
+    },
     { key: "profile", label: t("profile"), href: "/", icon: UserRound },
     {
       key: "settings",

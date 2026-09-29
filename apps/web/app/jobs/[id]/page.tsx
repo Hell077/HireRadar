@@ -16,7 +16,7 @@ import { Button } from "@repo/ui/components/button";
 import { AppHeader } from "@/components/app-header";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { Reveal } from "@/components/motion/reveal";
-import { markJobApplied } from "@/app/job-actions";
+import { markJobApplied, requestJobApplication } from "@/app/job-actions";
 import { getJob } from "@/lib/jobs";
 
 export default async function JobDetailsPage({
@@ -28,6 +28,7 @@ export default async function JobDetailsPage({
   const job = await getJob(id);
   if (!job) notFound();
   const t = await getTranslations("jobs");
+  const applicationT = await getTranslations("applications");
 
   return (
     <div className="min-h-screen pb-24 md:pb-0">
@@ -73,6 +74,17 @@ export default async function JobDetailsPage({
                   <span>{t("via", { source: job.source })}</span>
                 </div>
                 <div className="mt-6 flex flex-wrap gap-3">
+                  <form action={requestJobApplication}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input
+                      type="hidden"
+                      name="returnTo"
+                      value={`/jobs/${job.id}`}
+                    />
+                    <Button size="lg" type="submit">
+                      {applicationT("applyWithHireRadar")}
+                    </Button>
+                  </form>
                   <Button asChild size="lg">
                     <a href={job.applyUrl} target="_blank" rel="noreferrer">
                       {t("apply")}
@@ -148,19 +160,34 @@ export default async function JobDetailsPage({
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {t("matchExplanation")}
                 </p>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {applicationT("confidence", { value: job.matchConfidence })}
+                </p>
                 <div className="mt-4 space-y-2">
-                  {job.skills.map((skill) => (
-                    <div
-                      key={skill}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <Check
-                        className="size-4 text-success"
-                        aria-hidden="true"
-                      />
-                      {skill}
-                    </div>
-                  ))}
+                  {job.matchComponents.length
+                    ? job.matchComponents.map((component) => (
+                        <div
+                          key={component.code}
+                          className="flex items-center justify-between gap-2 text-sm"
+                        >
+                          <span>{component.code.replaceAll("_", " ")}</span>
+                          <span className="text-muted-foreground">
+                            {component.score}/{component.weight}
+                          </span>
+                        </div>
+                      ))
+                    : job.skills.map((skill) => (
+                        <div
+                          key={skill}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <Check
+                            className="size-4 text-success"
+                            aria-hidden="true"
+                          />
+                          {skill}
+                        </div>
+                      ))}
                 </div>
               </section>
             </Reveal>

@@ -19,6 +19,8 @@ export type Job = {
   salary: string;
   posted: string;
   match: number;
+  matchConfidence: number;
+  matchComponents: components["schemas"]["Component"][];
   summary: string;
   description: string;
   skills: string[];
@@ -74,6 +76,8 @@ function mapJob(job: APIJob, match?: Match): Job {
     salary: formatSalary(job.salary),
     posted: formatPosted(job.published_at ?? job.first_seen_at),
     match: match?.score ?? 0,
+    matchConfidence: match?.confidence ?? 0,
+    matchComponents: match?.components ?? [],
     summary: summarize(job.description),
     description: job.description,
     skills: (job.skills ?? []).map(({ name }) => name),
@@ -164,6 +168,8 @@ export async function getSavedJobs() {
     salary: "—",
     posted: formatPosted(job.saved_at),
     match: 0,
+    matchConfidence: 0,
+    matchComponents: [],
     summary: "",
     description: "",
     skills: [],

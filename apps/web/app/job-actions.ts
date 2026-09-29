@@ -38,6 +38,24 @@ export async function markJobApplied(formData: FormData) {
   );
 }
 
+export async function requestJobApplication(formData: FormData) {
+  const id = String(formData.get("jobId") ?? "");
+  const requestedReturnTo = String(formData.get("returnTo") ?? "/applications");
+  const returnTo =
+    requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+      ? requestedReturnTo
+      : "/applications";
+  const response = await authenticatedRequest(
+    `/api/v1/jobs/${encodeURIComponent(id)}/apply`,
+    { method: "POST" },
+    true,
+  ).catch(() => null);
+  revalidatePath("/applications");
+  redirect(
+    `${returnTo}${returnTo.includes("?") ? "&" : "?"}${response?.ok ? "application=queued" : "application=error"}`,
+  );
+}
+
 export async function hideJob(formData: FormData) {
   const id = String(formData.get("jobId") ?? "");
   await authenticatedRequest(

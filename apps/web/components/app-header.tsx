@@ -8,7 +8,8 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { AccountMenu } from "@/components/navigation/account-menu";
 import { NotificationsPanel } from "@/components/navigation/notifications-panel";
 
-type NavigationItem = "profile" | "jobs" | "saved" | "settings";
+type NavigationItem =
+  "profile" | "jobs" | "saved" | "applications" | "settings";
 
 export function AppHeader({ active = "profile" }: { active?: NavigationItem }) {
   const t = useTranslations("nav");
@@ -16,6 +17,7 @@ export function AppHeader({ active = "profile" }: { active?: NavigationItem }) {
     { key: "profile", label: t("profile"), href: "/" },
     { key: "jobs", label: t("jobs"), href: "/jobs" },
     { key: "saved", label: t("saved"), href: "/saved" },
+    { key: "applications", label: t("applications"), href: "/applications" },
     { key: "settings", label: t("settings"), href: "/settings" },
   ];
   return (
