@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Hell077/HireRadar/apps/backend/internal/source/domain"
 )
@@ -73,6 +74,28 @@ func TestAshbyMapsPublicBoardPostings(t *testing.T) {
 	}
 }
 
+func TestWorkablePublicCareersFeed(t *testing.T) {
+	const body = `{"jobs":[{"title":"Senior Engineer","shortcode":"AB12CD34","application_url":"https://apply.workable.com/j/AB12CD34/apply","employment_type":"Full-time","telecommuting":true,"country":"France","city":"Paris","published_on":"2026-07-30","description":"<p>Build systems</p>","locations":[{"countryCode":"FR"}]}]}`
+	r := NewRegistry()
+	r.client.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host != "www.workable.com" || req.URL.Path != "/api/accounts/huggingface" || req.URL.Query().Get("details") != "true" {
+			t.Fatalf("unexpected Workable request: %s", req.URL)
+		}
+		return response(body), nil
+	})
+	got, err := r.Fetch(context.Background(), domain.Source{Type: domain.Workable, CompanyName: "Hugging Face", Config: []byte(`{"board":"huggingface"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != domain.SyncSnapshot || len(got.Jobs) != 1 {
+		t.Fatalf("unexpected Workable fetch result: %+v", got)
+	}
+	job := got.Jobs[0]
+	if job.ExternalID != "AB12CD34" || job.EmploymentType != "Full-time" || !job.Remote || len(job.Countries) != 1 || job.Countries[0] != "FR" || job.PublishedAt == nil || !strings.Contains(string(job.Raw), "telecommuting") {
+		t.Fatalf("unexpected Workable job mapping: %+v", job)
+	}
+}
+
 func TestGitHubPaginatesAndExcludesPullRequests(t *testing.T) {
 	requests := 0
 	r := NewRegistryWithGitHubToken("test-github-token")
@@ -123,6 +146,16 @@ func TestRejectsBadBoardAndNonSuccessfulResponse(t *testing.T) {
 	})
 	if _, err := r.Fetch(context.Background(), domain.Source{Type: domain.Greenhouse, Config: []byte(`{"board":"acme"}`)}); err == nil || !strings.Contains(err.Error(), "HTTP 429") {
 		t.Fatalf("expected HTTP error, got %v", err)
+	}
+}
+
+func TestRetryAfterParserSupportsSecondsAndHTTPDate(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	if got := retryAfter("120", now); got != 2*time.Minute {
+		t.Fatalf("seconds Retry-After=%s", got)
+	}
+	if got := retryAfter(now.Add(90*time.Second).Format(http.TimeFormat), now); got != 90*time.Second {
+		t.Fatalf("date Retry-After=%s", got)
 	}
 }
 
@@ -191,7 +224,7 @@ func TestPublicRollingFeedsParseRealisticPayloadsWithoutClaimingSnapshot(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.AuthoritativeSnapshot || len(got.Jobs) != 1 || !test.check(got.Jobs[0]) || got.Jobs[0].PublishedAt == nil {
+			if got.Mode == domain.SyncSnapshot || len(got.Jobs) != 1 || !test.check(got.Jobs[0]) || got.Jobs[0].PublishedAt == nil {
 				t.Fatalf("unexpected rolling feed result: %+v", got)
 			}
 		})

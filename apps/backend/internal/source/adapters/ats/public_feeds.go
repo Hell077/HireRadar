@@ -26,7 +26,7 @@ func (r *Registry) fetchRemoteOK(ctx context.Context, source domain.Source) (dom
 	if err := json.Unmarshal(body, &rows); err != nil {
 		return domain.FetchResult{}, fmt.Errorf("decode RemoteOK response: %w", err)
 	}
-	result := domain.FetchResult{Jobs: []domain.ExternalJob{}}
+	result := domain.FetchResult{Jobs: []domain.ExternalJob{}, Mode: domain.SyncWindowed}
 	for _, raw := range rows {
 		var item struct {
 			ID          json.RawMessage `json:"id"`
@@ -71,7 +71,7 @@ func (r *Registry) fetchJobicy(ctx context.Context, source domain.Source) (domai
 	if response.Jobs == nil {
 		return domain.FetchResult{}, errors.New("decode Jobicy response: jobs array is missing")
 	}
-	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(response.Jobs))}
+	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(response.Jobs)), Mode: domain.SyncWindowed}
 	for _, raw := range response.Jobs {
 		var item struct {
 			ID             json.RawMessage `json:"id"`
@@ -130,7 +130,7 @@ func (r *Registry) fetchWeWorkRemotely(ctx context.Context, source domain.Source
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return domain.FetchResult{}, fmt.Errorf("We Work Remotely returned HTTP %d", resp.StatusCode)
+		return domain.FetchResult{}, &domain.HTTPError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
@@ -146,7 +146,7 @@ func (r *Registry) fetchWeWorkRemotely(ctx context.Context, source domain.Source
 	if feed.Items == nil {
 		return domain.FetchResult{}, errors.New("decode We Work Remotely feed: channel items are missing")
 	}
-	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(feed.Items))}
+	result := domain.FetchResult{Jobs: make([]domain.ExternalJob, 0, len(feed.Items)), Mode: domain.SyncWindowed}
 	for _, item := range feed.Items {
 		id := strings.TrimSpace(item.GUID)
 		if id == "" {

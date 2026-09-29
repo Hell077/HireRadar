@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -17,6 +18,22 @@ import (
 type fixtureFetcher struct {
 	result domain.FetchResult
 	err    error
+}
+
+func TestRetryDelayBackoffAndRetryAfter(t *testing.T) {
+	for attempt, want := range []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour} {
+		got := retryDelay(attempt+1, errors.New("temporary network error"))
+		if got < time.Duration(float64(want)*0.8) || got > time.Duration(float64(want)*1.2) {
+			t.Fatalf("attempt %d retry delay %s outside jittered %s", attempt+1, got, want)
+		}
+	}
+	got := retryDelay(1, &domain.HTTPError{StatusCode: 429, RetryAfter: 3 * time.Minute})
+	if got < 3*time.Minute || got > 4*time.Minute {
+		t.Fatalf("Retry-After was not honored: %s", got)
+	}
+	if got := retryDelay(99, &domain.HTTPError{StatusCode: 503, RetryAfter: 12 * time.Hour}); got > 6*time.Hour {
+		t.Fatalf("retry delay exceeded cap: %s", got)
+	}
 }
 
 func (f fixtureFetcher) Fetch(context.Context, domain.Source) (domain.FetchResult, error) {
@@ -99,7 +116,7 @@ func TestSourceWorkerPersistsReplayableSnapshotsAndIsolatesFailures(t *testing.T
 	if status != "active" {
 		t.Fatalf("rolling partial feed closed an older job: %q", status)
 	}
-	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, AuthoritativeSnapshot: true}}
+	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, Mode: domain.SyncSnapshot}}
 	for range 2 {
 		if err := w.syncSource(ctx, domain.Source{ID: sourceID}); err != nil {
 			t.Fatal(err)
@@ -192,7 +209,7 @@ func TestCatalogDeduplicatesSourcesAndDelaysClosure(t *testing.T) {
 		t.Fatalf("lower-priority mirror replaced official data: url=%q description=%q", canonicalURL, description)
 	}
 	// One successful absence does not close a job; the other source still lists it.
-	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, AuthoritativeSnapshot: true}}
+	w.fetcher = fixtureFetcher{result: domain.FetchResult{Jobs: []domain.ExternalJob{}, Mode: domain.SyncSnapshot}}
 	for range 2 {
 		if err := w.syncSource(ctx, primary); err != nil {
 			t.Fatal(err)

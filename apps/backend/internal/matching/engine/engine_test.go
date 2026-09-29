@@ -28,6 +28,23 @@ func TestEvaluateProducesWeightedExplanation(t *testing.T) {
 	}
 }
 
+func TestEmploymentTypeAliasesReachScorer(t *testing.T) {
+	now := time.Now().UTC()
+	candidate := Candidate{Profile: profiledomain.Profile{Country: "KZ"}, Preferences: profiledomain.Preferences{
+		EmploymentTypes: []string{"full_time"}, MinimumMatchScore: 0, MaximumJobAgeDays: 30,
+	}}
+	for _, test := range []struct{ jobType, preference string }{
+		{"Full-Time", "full_time"}, {"full_time", "full_time"},
+		{"Contract", "contract"}, {"Part-Time", "part_time"}, {"Freelance", "freelance"},
+	} {
+		candidate.Preferences.EmploymentTypes = []string{test.preference}
+		got := Evaluate(candidate, jobdomain.Job{ID: "j", Title: "Backend Engineer", Status: jobdomain.Active, Eligibility: jobdomain.Eligible, RemotePolicy: jobdomain.RemoteWorldwide, EmploymentTypes: []string{test.jobType}, FirstSeenAt: now}, now)
+		if !got.Eligible {
+			t.Errorf("employment %q did not match canonical preference %q (%+v)", test.jobType, test.preference, got)
+		}
+	}
+}
+
 func TestSkillScoreDoesNotTrustGoTagWithoutProgrammingContext(t *testing.T) {
 	profileSkills := []profiledomain.Skill{{Name: "Go"}}
 	jobSkills := []jobdomain.JobSkill{{Name: "Go"}}

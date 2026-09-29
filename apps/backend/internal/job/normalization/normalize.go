@@ -62,14 +62,78 @@ func CleanDescription(value string) string {
 
 func Normalize(source sourcedomain.Source, external sourcedomain.ExternalJob) jobdomain.Job {
 	policy, eligibility, countries := ClassifyLocation(external.Location)
-	classification := ClassifyPosition(external.Title)
-	types := []string{}
-	if value := strings.TrimSpace(external.EmploymentType); value != "" {
-		types = append(types, value)
+	if external.Remote && policy == jobdomain.Onsite {
+		policy = jobdomain.Remote
 	}
+	if len(external.Countries) > 0 {
+		countries = append([]string(nil), external.Countries...)
+		sort.Strings(countries)
+		countries = compact(countries)
+		if eligibility != jobdomain.NotEligible {
+			eligibility = jobdomain.EligibilityUnknown
+		}
+	}
+	classification := ClassifyPosition(external.Title)
+	types := NormalizeEmploymentTypes(external.EmploymentType)
 	description := CleanDescription(external.Description)
 	salary := ExtractSalary(external.Description)
+	if external.Salary != nil && external.Salary.Minimum > 0 && external.Salary.Maximum >= external.Salary.Minimum && strings.TrimSpace(external.Salary.Currency) != "" {
+		salary = &jobdomain.SalaryRange{Minimum: external.Salary.Minimum, Maximum: external.Salary.Maximum, Currency: strings.ToUpper(external.Salary.Currency), Period: "unspecified"}
+	}
 	return jobdomain.Job{Company: strings.TrimSpace(external.CompanyName), Title: strings.TrimSpace(external.Title), NormalizedTitle: TitleKey(external.Title), Seniority: classification.Seniority, Family: classification.Family, Speciality: classification.Speciality, FamilyConfidence: classification.Confidence, SeniorityConfidence: seniorityConfidence(classification.Seniority), LocationConfidence: locationConfidence(policy, eligibility, countries), SalaryConfidence: salaryConfidence(salary), Description: description, Salary: salary, EmploymentTypes: types, RemotePolicy: policy, Location: strings.TrimSpace(external.Location), Countries: countries, Eligibility: eligibility, ApplyURL: strings.TrimSpace(external.ApplyURL), PublishedAt: external.PublishedAt, SourcePriority: source.Priority, Status: jobdomain.Active}
+}
+
+func compact(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	out := values[:1]
+	for _, value := range values[1:] {
+		if value != out[len(out)-1] {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+// NormalizeEmploymentTypes maps provider labels to the persisted vocabulary.
+// Unknown non-empty labels are retained as "unknown" rather than silently
+// becoming a preference-compatible type.
+func NormalizeEmploymentTypes(value string) []string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return []string{}
+	}
+	key := nonWord.ReplaceAllString(value, " ")
+	key = strings.Join(strings.Fields(key), " ")
+	if strings.Contains(key, "full time") || strings.Contains(key, "fulltime") || strings.Contains(key, "permanent") {
+		if strings.Contains(key, "intern") || strings.Contains(key, "co op") {
+			return []string{"full_time", "internship"}
+		}
+		return []string{"full_time"}
+	}
+	if strings.Contains(key, "part time") || strings.Contains(key, "parttime") {
+		return []string{"part_time"}
+	}
+	if strings.Contains(key, "intern") || strings.Contains(key, "co op") {
+		return []string{"internship"}
+	}
+	if strings.Contains(key, "freelance") {
+		return []string{"freelance"}
+	}
+	if strings.Contains(key, "b2b") || strings.Contains(key, "business to business") {
+		return []string{"b2b"}
+	}
+	if strings.Contains(key, "temporary") || strings.Contains(key, "fixed term") || strings.Contains(key, "fixedterm") {
+		if strings.Contains(key, "contract") || strings.Contains(key, "contractor") {
+			return []string{"contract", "temporary"}
+		}
+		return []string{"temporary"}
+	}
+	if strings.Contains(key, "contract") || strings.Contains(key, "contractor") {
+		return []string{"contract"}
+	}
+	return []string{"unknown"}
 }
 
 func seniorityConfidence(value jobdomain.Seniority) float64 {

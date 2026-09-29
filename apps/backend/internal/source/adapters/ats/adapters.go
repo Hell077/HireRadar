@@ -49,6 +49,8 @@ func (r *Registry) Fetch(ctx context.Context, source domain.Source) (domain.Fetc
 		return r.fetchJobicy(ctx, source)
 	case domain.WeWorkRemotely:
 		return r.fetchWeWorkRemotely(ctx, source)
+	case domain.Workable:
+		return r.fetchWorkable(ctx, source)
 	default:
 		return domain.FetchResult{}, fmt.Errorf("unsupported source type %q", source.Type)
 	}
@@ -95,7 +97,7 @@ func (r *Registry) get(ctx context.Context, endpoint string) ([]byte, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("ATS returned HTTP %d", resp.StatusCode)
+		return nil, &domain.HTTPError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
@@ -105,6 +107,20 @@ func (r *Registry) get(ctx context.Context, endpoint string) ([]byte, error) {
 		return nil, errors.New("ATS response exceeds 32 MiB")
 	}
 	return data, nil
+}
+
+func retryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds >= 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if at, err := http.ParseTime(value); err == nil && at.After(now) {
+		return at.Sub(now)
+	}
+	return 0
 }
 
 func (r *Registry) fetchGreenhouse(ctx context.Context, source domain.Source) (domain.FetchResult, error) {
@@ -147,7 +163,7 @@ func (r *Registry) fetchGreenhouse(ctx context.Context, source domain.Source) (d
 		published := parseTime(item.Updated)
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: strconv.FormatInt(item.ID, 10), CompanyName: source.CompanyName, Title: item.Title, Description: item.Content, Location: item.Location.Name, ApplyURL: item.URL, PublishedAt: published, Raw: raw})
 	}
-	result.AuthoritativeSnapshot = true
+	result.Mode = domain.SyncSnapshot
 	return result, nil
 }
 
@@ -205,7 +221,7 @@ func (r *Registry) fetchLever(ctx context.Context, source domain.Source) (domain
 			result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Text, Description: item.Description, Location: item.Categories.Location, EmploymentType: item.Categories.Commitment, ApplyURL: item.URL, PublishedAt: published, Raw: item.Raw})
 		}
 		if len(items) < cfg.Limit {
-			result.AuthoritativeSnapshot = true
+			result.Mode = domain.SyncSnapshot
 			return result, nil
 		}
 	}
@@ -262,7 +278,7 @@ func (r *Registry) fetchAshby(ctx context.Context, source domain.Source) (domain
 		}
 		result.Jobs = append(result.Jobs, domain.ExternalJob{ExternalID: item.ID, CompanyName: source.CompanyName, Title: item.Title, Description: item.Description, Location: item.Location, EmploymentType: item.EmploymentType, ApplyURL: item.URL, PublishedAt: parseTime(item.Published), Raw: raw})
 	}
-	result.AuthoritativeSnapshot = true
+	result.Mode = domain.SyncSnapshot
 	return result, nil
 }
 
@@ -355,7 +371,7 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 			return domain.FetchResult{}, errors.New("GitHub response exceeds 32 MiB")
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return domain.FetchResult{}, fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
+			return domain.FetchResult{}, &domain.HTTPError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 		}
 		var rows []json.RawMessage
 		if len(bytes.TrimSpace(body)) == 0 || bytes.TrimSpace(body)[0] != '[' {
@@ -384,7 +400,7 @@ func (r *Registry) fetchGitHub(ctx context.Context, source domain.Source) (domai
 			result.NextCursor, _ = json.Marshal(struct {
 				LastPage int `json:"last_page"`
 			}{page})
-			result.AuthoritativeSnapshot = true
+			result.Mode = domain.SyncSnapshot
 			return result, nil
 		}
 	}

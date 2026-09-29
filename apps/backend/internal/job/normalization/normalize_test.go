@@ -1,6 +1,7 @@
 package normalization
 
 import (
+	"strings"
 	"testing"
 
 	jobdomain "github.com/Hell077/HireRadar/apps/backend/internal/job/domain"
@@ -106,6 +107,26 @@ func TestNormalizationPreservesDisplayDataAndCanonicalizesKeys(t *testing.T) {
 	}
 	if got := CleanDescription("<p>Build&nbsp;tools &amp; APIs</p>"); got != "Build tools & APIs" {
 		t.Fatalf("description=%q", got)
+	}
+}
+
+func TestNormalizeEmploymentTypes(t *testing.T) {
+	tests := map[string][]string{
+		"Full-Time": {"full_time"}, "Full Time": {"full_time"}, "full-time": {"full_time"},
+		"FULL_TIME": {"full_time"}, "Permanent": {"full_time"},
+		"Contractor": {"contract"}, "Contract": {"contract"}, "Independent Contractor - Project Based": {"contract"},
+		"Part-Time": {"part_time"}, "Part Time": {"part_time"}, "Freelance": {"freelance"},
+		"Temporary": {"temporary"}, "Fixed-term": {"temporary"}, "Intern": {"internship"},
+		"Full Time or Intern/Co-op": {"full_time", "internship"}, "Hourly": {"unknown"}, "": nil,
+	}
+	for input, want := range tests {
+		got := NormalizeEmploymentTypes(input)
+		if input == "" && got == nil {
+			t.Fatal("empty employment type must be persisted as an empty array, not NULL")
+		}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("NormalizeEmploymentTypes(%q)=%v want %v", input, got, want)
+		}
 	}
 }
 

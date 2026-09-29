@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -203,7 +204,7 @@ func (w *Worker) save(ctx context.Context, source domain.Source, runID string, r
 			updatedCount++
 		}
 	}
-	if result.AuthoritativeSnapshot {
+	if result.Mode == domain.SyncSnapshot {
 		closedCount, err = w.jobs.CloseMissing(ctx, tx, source.ID, runID)
 		if err != nil {
 			return 0, 0, err
@@ -235,7 +236,14 @@ func (w *Worker) finishFailed(ctx context.Context, source domain.Source, runID s
 	if _, err := tx.Exec(ctx, `UPDATE source_sync_runs SET status='failed',finished_at=now(),error_message=$2 WHERE id=$1`, runID, message); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE sources SET next_sync_at=now()+interval '1 minute',updated_at=now() WHERE id=$1`, source.ID); err != nil {
+	var consecutive int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM source_sync_runs
+		WHERE source_id=$1 AND status='failed' AND started_at > COALESCE(
+			(SELECT max(started_at) FROM source_sync_runs WHERE source_id=$1 AND status='succeeded'), '-infinity'::timestamptz)`, source.ID).Scan(&consecutive); err != nil {
+		return err
+	}
+	delay := retryDelay(consecutive, cause)
+	if _, err := tx.Exec(ctx, `UPDATE sources SET next_sync_at=now()+make_interval(secs=>$2),updated_at=now() WHERE id=$1`, source.ID, delay.Seconds()); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -243,6 +251,24 @@ func (w *Worker) finishFailed(ctx context.Context, source domain.Source, runID s
 	}
 	observability.DefaultMetrics.Add("hireradar_source_sync_retry_total", nil, 1)
 	return nil
+}
+
+func retryDelay(consecutive int, cause error) time.Duration {
+	delays := [...]time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour}
+	if consecutive < 1 {
+		consecutive = 1
+	}
+	base := delays[min(consecutive-1, len(delays)-1)]
+	var httpErr *domain.HTTPError
+	// Jitter by +/- 20% to keep many sources from retrying together.
+	jitter := time.Duration(float64(base) * (0.8 + rand.Float64()*0.4))
+	if errors.As(cause, &httpErr) && httpErr.RetryAfter > jitter {
+		jitter = httpErr.RetryAfter
+	}
+	if jitter > 6*time.Hour {
+		jitter = 6 * time.Hour
+	}
+	return jitter
 }
 
 func nonNullJSON(data json.RawMessage) string {

@@ -226,7 +226,12 @@ func (s *Store) CandidateJobPage(ctx context.Context, userID user.UserID, candid
 		AND NOT (j.location_countries && $3::text[])
 		AND (cardinality($4::text[])=0 OR j.remote_policy=ANY($4::text[])
 			OR ('worldwide'=ANY($4::text[]) AND j.remote_policy='remote' AND cardinality(j.location_countries)=0))
-		AND (cardinality($5::text[])=0 OR j.employment_types && $5::text[])
+		AND (cardinality($5::text[])=0 OR EXISTS (
+			SELECT 1 FROM unnest(j.employment_types) job_type
+			JOIN unnest($5::text[]) wanted_type
+				ON trim(both '_' FROM regexp_replace(lower(job_type), '[^a-z0-9]+', '_', 'g'))
+			 = trim(both '_' FROM regexp_replace(lower(wanted_type), '[^a-z0-9]+', '_', 'g'))
+		))
 		AND (j.published_at IS NULL OR j.published_at >= now()-($6::int*interval '1 day'))
 		AND (j.published_at IS NOT NULL OR j.first_seen_at >= now()-($6::int*interval '1 day'))
 		AND NOT EXISTS(SELECT 1 FROM user_job_feedback f WHERE f.user_id=$1 AND f.job_id=j.id AND f.feedback_type IN ('hidden','not_interested','applied'))
@@ -299,7 +304,12 @@ func (s *Store) CandidateIDsForJob(ctx context.Context, job jobdomain.Job, curso
 		AND NOT ($2::text[] && COALESCE(jp.excluded_countries,'{}'::text[]))
 		AND (COALESCE(jp.remote_policies,'{}'::text[])= '{}'::text[] OR $3=ANY(jp.remote_policies)
 			OR ('worldwide'=ANY(jp.remote_policies) AND $3='remote' AND cardinality($2::text[])=0))
-		AND (COALESCE(jp.employment_types,'{}'::text[])= '{}'::text[] OR jp.employment_types && $4::text[])
+		AND (COALESCE(jp.employment_types,'{}'::text[])= '{}'::text[] OR EXISTS (
+			SELECT 1 FROM unnest(COALESCE(jp.employment_types,'{}'::text[])) wanted_type
+			JOIN unnest($4::text[]) job_type
+				ON trim(both '_' FROM regexp_replace(lower(wanted_type), '[^a-z0-9]+', '_', 'g'))
+			 = trim(both '_' FROM regexp_replace(lower(job_type), '[^a-z0-9]+', '_', 'g'))
+		))
 		AND (jp.minimum_salary_amount IS NULL OR $5::float8 IS NULL OR jp.minimum_salary_currency<>$6
 			OR $7<>'year' OR $5 >= jp.minimum_salary_amount)
 		AND (COALESCE(jp.maximum_job_age_days,30)<=0 OR $8::timestamptz IS NULL

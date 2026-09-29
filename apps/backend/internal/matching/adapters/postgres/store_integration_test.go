@@ -67,7 +67,7 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	goodID, rejectedID := uuid.NewString(), uuid.NewString()
 	insertJob := func(id, title, country, eligibility string) {
 		t.Helper()
-		_, err := pool.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,salary_min,salary_max,salary_currency,salary_period,employment_types,remote_policy,location,location_countries,eligibility,apply_url,fingerprint,status) VALUES($1,$2,$3,$4,'senior','Go backend',120000,150000,'USD','year','{full_time}','remote',$5,$6,$7,$8,$9,'active')`, id, companyID, title, title, "Remote — "+country, []string{country}, eligibility, "https://example.test/"+id, make([]byte, 32))
+		_, err := pool.Exec(ctx, `INSERT INTO jobs(id,company_id,title,normalized_title,seniority,description,salary_min,salary_max,salary_currency,salary_period,employment_types,remote_policy,location,location_countries,eligibility,apply_url,fingerprint,status) VALUES($1,$2,$3,$4,'senior','Go backend',120000,150000,'USD','year','{Full-Time}','remote',$5,$6,$7,$8,$9,'active')`, id, companyID, title, title, "Remote — "+country, []string{country}, eligibility, "https://example.test/"+id, make([]byte, 32))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,6 +91,13 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].JobID != goodID || results[0].Score < 60 {
 		t.Fatalf("unexpected matching result: %+v", results)
+	}
+	users, _, err := NewStore(pool).CandidateIDsForJob(ctx, jobdomain.Job{ID: goodID, Eligibility: "eligible", Countries: []string{"KZ"}, RemotePolicy: "remote", EmploymentTypes: []string{"Full-Time"}}, "", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsUser(users, user.UserID(userID)) {
+		t.Fatalf("employment normalization excluded candidate from job matching: %v", users)
 	}
 	var candidateVersion, jobVersion, savedCandidateVersion, savedJobVersion int64
 	var savedConfidence int
@@ -200,6 +207,15 @@ func TestMatchingRefreshPreselectsAndPersistsIdempotently(t *testing.T) {
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("stale match was not cleared: %+v err=%v", listed, err)
 	}
+}
+
+func containsUser(values []user.UserID, wanted user.UserID) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func hasCandidatePosition(values []string, wanted string) bool {

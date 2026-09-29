@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -18,6 +19,7 @@ const (
 	RemoteOK       Type = "remoteok"
 	Jobicy         Type = "jobicy"
 	WeWorkRemotely Type = "weworkremotely"
+	Workable       Type = "workable"
 )
 
 type Source struct {
@@ -45,13 +47,39 @@ type ExternalJob struct {
 	Description    string          `json:"description"`
 	Location       string          `json:"location"`
 	EmploymentType string          `json:"employment_type,omitempty"`
+	Remote         bool            `json:"remote,omitempty"`
+	Countries      []string        `json:"countries,omitempty"`
+	Salary         *ExternalSalary `json:"salary,omitempty"`
 	ApplyURL       string          `json:"apply_url"`
 	PublishedAt    *time.Time      `json:"published_at,omitempty"`
 	Raw            json.RawMessage `json:"raw"`
 }
 
-type FetchResult struct {
-	Jobs                  []ExternalJob
-	NextCursor            json.RawMessage
-	AuthoritativeSnapshot bool
+type ExternalSalary struct {
+	Minimum  float64 `json:"minimum"`
+	Maximum  float64 `json:"maximum"`
+	Currency string  `json:"currency"`
 }
+
+type FetchResult struct {
+	Jobs       []ExternalJob
+	NextCursor json.RawMessage
+	Mode       SyncMode
+}
+
+// SyncMode describes the completeness of one successful fetch. Only a
+// complete snapshot may close jobs that were absent from that fetch.
+type SyncMode string
+
+const (
+	SyncIncremental SyncMode = "incremental"
+	SyncWindowed    SyncMode = "windowed"
+	SyncSnapshot    SyncMode = "snapshot"
+)
+
+type HTTPError struct {
+	StatusCode int
+	RetryAfter time.Duration
+}
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("source returned HTTP %d", e.StatusCode) }
