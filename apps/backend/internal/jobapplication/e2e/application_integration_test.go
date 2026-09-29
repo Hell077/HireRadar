@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hell077/HireRadar/apps/backend/internal/adapters/in/httpapi"
-	"github.com/Hell077/HireRadar/apps/backend/internal/application/health"
 	greenhouse "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/greenhouse"
 	jobapplicationpostgres "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/adapters/postgres"
 	jobapplicationapp "github.com/Hell077/HireRadar/apps/backend/internal/jobapplication/application"
@@ -21,6 +19,7 @@ import (
 	notificationpostgres "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/postgres"
 	telegram "github.com/Hell077/HireRadar/apps/backend/internal/notification/adapters/telegram"
 	notificationapp "github.com/Hell077/HireRadar/apps/backend/internal/notification/application"
+	"github.com/Hell077/HireRadar/apps/backend/internal/notification/telegramwebhook"
 	outboxpostgres "github.com/Hell077/HireRadar/apps/backend/internal/outbox/adapters/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -136,14 +135,17 @@ func TestTelegramApplyRunsThroughGreenhouseAndConfirmsSubmittedOnce(t *testing.T
 	applicationService := jobapplicationapp.NewRequestService(store, uuid.NewString, time.Now)
 	notificationService := notificationapp.NewService(notificationpostgres.NewStore(pool), "hireradar_bot", time.Now, telegramBot)
 	notificationService.SetApplicationRequester(applicationService)
-	api := httpapi.New(health.NewService(), httpapi.AuthServices{Telegram: notificationService, TelegramWebhookSecret: "integration-webhook-secret"})
-	defer api.Shutdown()
+	webhook := httptest.NewServer(telegramwebhook.New("integration-webhook-secret", notificationService, pool))
+	defer webhook.Close()
 	callbackBody := `{"callback_query":{"id":"apply-e2e","data":"job:apply:` + jobID + `","from":{"id":` + fmt.Sprint(telegramUserID) + `}}}`
 	for range 2 {
-		request := httptest.NewRequest(http.MethodPost, "/webhooks/telegram", strings.NewReader(callbackBody))
+		request, err := http.NewRequest(http.MethodPost, webhook.URL+"/telegram/webhook", strings.NewReader(callbackBody))
+		if err != nil {
+			t.Fatal(err)
+		}
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Telegram-Bot-Api-Secret-Token", "integration-webhook-secret")
-		response, err := api.Test(request)
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,17 +155,17 @@ func TestTelegramApplyRunsThroughGreenhouseAndConfirmsSubmittedOnce(t *testing.T
 		}
 	}
 
-	var applicationID string
+	var applicationID, requestEventID string
 	var applications, requestedEvents int
 	if err := pool.QueryRow(ctx, `SELECT count(*),min(id::text) FROM job_applications WHERE user_id=$1 AND job_id=$2`, userID, jobID).Scan(&applications, &applicationID); err != nil || applications != 1 {
 		t.Fatalf("applications=%d id=%q err=%v", applications, applicationID, err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE event_type='application.requested' AND aggregate_id=$1`, applicationID).Scan(&requestedEvents); err != nil || requestedEvents != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*),min(id::text) FROM outbox_events WHERE event_type='application.requested' AND aggregate_id=$1`, applicationID).Scan(&requestedEvents, &requestEventID); err != nil || requestedEvents != 1 {
 		t.Fatalf("application.requested events=%d err=%v", requestedEvents, err)
 	}
 
 	worker := jobapplicationapp.NewWorker(outboxpostgres.NewStore(pool), store, jobapplicationapp.NewProviderRegistry(provider), "application-e2e", time.Now)
-	if processed, err := worker.ProcessNext(ctx); err != nil || !processed {
+	if processed, err := worker.ProcessEvent(ctx, requestEventID); err != nil || !processed {
 		t.Fatalf("application worker processed=%v err=%v", processed, err)
 	}
 	var status string
@@ -184,18 +186,33 @@ func TestTelegramApplyRunsThroughGreenhouseAndConfirmsSubmittedOnce(t *testing.T
 	if attempts != 1 || processedEvents != 1 {
 		t.Fatalf("attempts=%d processed request events=%d", attempts, processedEvents)
 	}
-	if processed, err := worker.ProcessNext(ctx); err != nil || processed {
+	if processed, err := worker.ProcessEvent(ctx, requestEventID); err != nil || processed {
 		t.Fatalf("duplicate application work found=%v err=%v", processed, err)
 	}
 
 	notificationWorker := notificationpostgres.NewWorker(pool, telegramBot, time.Now)
-	for range 20 {
-		processed, err := notificationWorker.ProcessNext(ctx)
-		if err != nil {
+	statusRows, err := pool.Query(ctx, `SELECT id::text FROM outbox_events WHERE event_type LIKE 'application.status.%' AND aggregate_id=$1 AND status='pending' ORDER BY occurred_at,id`, applicationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statusEventIDs []string
+	for statusRows.Next() {
+		var id string
+		if err := statusRows.Scan(&id); err != nil {
+			statusRows.Close()
 			t.Fatal(err)
 		}
-		if !processed {
-			break
+		statusEventIDs = append(statusEventIDs, id)
+	}
+	if err := statusRows.Err(); err != nil {
+		statusRows.Close()
+		t.Fatal(err)
+	}
+	statusRows.Close()
+	for _, eventID := range statusEventIDs {
+		processed, err := notificationWorker.ProcessApplicationEvent(ctx, eventID)
+		if err != nil || !processed {
+			t.Fatalf("application status event %s processed=%v err=%v", eventID, processed, err)
 		}
 	}
 	var submittedStatusEvents, pendingApplicationEvents int
