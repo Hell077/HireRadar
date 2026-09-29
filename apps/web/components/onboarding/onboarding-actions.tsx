@@ -19,7 +19,7 @@ export async function OnboardingActions({
 }: OnboardingActionsProps) {
   const t = await getTranslations("common");
   return (
-    <div className="mt-8 flex items-center justify-between gap-4 border-t pt-6">
+    <div className="mt-8 flex items-center justify-between gap-4">
       {backHref ? (
         <Button asChild variant="ghost">
           <Link href={backHref}>

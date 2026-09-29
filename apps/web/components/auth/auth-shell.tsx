@@ -82,7 +82,7 @@ export async function AuthShell({
               </CardHeader>
               <CardContent className="space-y-6 px-6 sm:px-8">
                 {children}
-                <div className="border-t pt-6 text-center text-sm text-muted-foreground">
+                <div className="pt-2 text-center text-sm text-muted-foreground">
                   {footer}
                 </div>
               </CardContent>

@@ -54,7 +54,21 @@ export async function signIn(formData: FormData) {
     redirect(`/sign-in?error=${error}`);
   }
   await storeTokens(tokens as Parameters<typeof storeTokens>[0]);
-  redirect("/onboarding/profile");
+  let hasProfile = false;
+  try {
+    const profile = await fetch(`${apiBaseUrl}/api/v1/profile`, {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      cache: "no-store",
+    });
+    if (profile.ok) {
+      const value = (await profile.json()) as {
+        first_name?: string;
+        last_name?: string;
+      };
+      hasProfile = Boolean(value.first_name?.trim() || value.last_name?.trim());
+    }
+  } catch {}
+  redirect(hasProfile ? "/" : "/onboarding/profile");
 }
 
 export async function requestPasswordReset(formData: FormData) {

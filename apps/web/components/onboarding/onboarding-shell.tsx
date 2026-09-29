@@ -29,7 +29,7 @@ export async function OnboardingShell({
   ];
   return (
     <main className="min-h-svh bg-background">
-      <header className="border-b bg-card">
+      <header className="bg-card/70">
         <div className="mx-auto flex h-18 w-full max-w-5xl items-center justify-between px-5 sm:px-8">
           <Link href="/" className="flex items-center gap-2.5 font-semibold">
             <span className="grid size-9 place-items-center rounded-lg bg-primary text-xs text-primary-foreground">
@@ -46,7 +46,7 @@ export async function OnboardingShell({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-12">
+      <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
         <Reveal delay={0.02}>
           <ol
             className="mb-10 grid grid-cols-4"

@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { FileText, ShieldCheck, Upload } from "lucide-react";
 import { Button } from "@repo/ui/components/button";
-import { Card, CardContent } from "@repo/ui/components/card";
 
 import { completeResumeUpload, createResumeUpload } from "@/app/resume-actions";
 
@@ -62,42 +61,40 @@ export function ResumeUploader({ labels }: Props) {
           : null;
 
   return (
-    <Card>
-      <CardContent>
-        <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-secondary/40 px-6 py-10 text-center transition-colors hover:bg-accent/50">
-          <input
-            className="sr-only"
-            type="file"
-            accept="application/pdf,.pdf"
-            disabled={status === "uploading"}
-            onChange={(event) => upload(event.currentTarget.files?.[0])}
-          />
-          <span className="grid size-12 place-items-center rounded-xl bg-card text-primary shadow-sm">
-            {status === "uploaded" ? (
-              <FileText className="size-5" aria-hidden="true" />
-            ) : (
-              <Upload className="size-5" aria-hidden="true" />
-            )}
-          </span>
-          <span className="mt-5 text-base font-semibold">{labels.drop}</span>
-          <span className="mt-2 text-sm text-muted-foreground">
-            {labels.help}
-          </span>
-          <Button className="mt-5" type="button" variant="outline">
-            <FileText aria-hidden="true" />
-            {labels.choose}
-          </Button>
-          {statusText && (
-            <span className="mt-3 text-sm text-muted-foreground" role="status">
-              {statusText}
-            </span>
+    <div className="rounded-2xl bg-card p-5 shadow-sm">
+      <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-xl bg-secondary/40 px-6 py-9 text-center transition-colors hover:bg-accent/50">
+        <input
+          className="sr-only"
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={status === "uploading"}
+          onChange={(event) => upload(event.currentTarget.files?.[0])}
+        />
+        <span className="grid size-12 place-items-center rounded-xl bg-card text-primary shadow-sm">
+          {status === "uploaded" ? (
+            <FileText className="size-5" aria-hidden="true" />
+          ) : (
+            <Upload className="size-5" aria-hidden="true" />
           )}
-        </label>
-        <div className="mt-5 flex items-start gap-3 rounded-lg bg-success-soft p-4 text-success">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-          <p className="text-xs leading-5">{labels.privacy}</p>
-        </div>
-      </CardContent>
-    </Card>
+        </span>
+        <span className="mt-5 text-base font-semibold">{labels.drop}</span>
+        <span className="mt-2 text-sm text-muted-foreground">
+          {labels.help}
+        </span>
+        <Button className="mt-5" type="button" variant="outline">
+          <FileText aria-hidden="true" />
+          {labels.choose}
+        </Button>
+        {statusText && (
+          <span className="mt-3 text-sm text-muted-foreground" role="status">
+            {statusText}
+          </span>
+        )}
+      </label>
+      <div className="mt-5 flex items-start gap-3 rounded-lg bg-success-soft p-4 text-success">
+        <ShieldCheck className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <p className="text-xs leading-5">{labels.privacy}</p>
+      </div>
+    </div>
   );
 }
